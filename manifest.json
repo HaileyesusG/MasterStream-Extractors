@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "providers": {
     "Videasy": {
       "file": "extractors/VideasyExtractor.js",
@@ -8,6 +8,14 @@
     "Vidlink": {
       "file": "extractors/VidlinkExtractor.js",
       "hash": "B27400945DBFC433A963FDE3CEF10DD1"
+    },
+    "VixSrc": {
+      "file": "extractors/VixSrcExtractor.js",
+      "hash": "4FA32E3BCF71AFF08497A982FCA999B0"
+    },
+    "VidSrcCC": {
+      "file": "extractors/VidSrcCCExtractor.js",
+      "hash": "9455715A06BEBD8C0E0B1335E1DFDD6B"
     }
   }
 }

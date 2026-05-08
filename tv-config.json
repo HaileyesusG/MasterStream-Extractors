@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "Videasy": {
+    "domain": "https://api.videasy.net",
+    "serverPath": "/mb-flix/sources-with-title",
+    "decryptUrl": "https://enc-dec.app/api/dec-videasy",
+    "referer": "https://cineby.sc/",
+    "origin": "https://cineby.sc",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  "Vidlink": {
+    "baseUrl": "https://vidlink.pro",
+    "encApi": "https://enc-dec.app/api/enc-vidlink",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  }
+}

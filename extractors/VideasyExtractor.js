@@ -8,8 +8,7 @@
 (function () {
   var TAG = '[VideasyExtractor]';
   var DOMAIN = 'https://api.videasy.net';
-  var USER_AGENT =
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 OPR/126.0.0.0 (Edition std-2)';
 
   async function fetchGet(url, headers) {
     try {
@@ -44,7 +43,7 @@
     }
   }
 
-  async function extract(tmdbId, imdbId, title, isTv, season, episode) {
+  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
       var headers = {
         'User-Agent': USER_AGENT,
@@ -58,6 +57,10 @@
         DOMAIN + '/mb-flix/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
         '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
         '&title=' + encTitle;
+
+      if (year) {
+        url += '&year=' + year;
+      }
 
       if (isTv) {
         url += '&episodeId=' + episode + '&seasonId=' + season;

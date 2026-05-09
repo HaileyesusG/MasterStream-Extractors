@@ -53,7 +53,7 @@
 
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
-      var servers = isTv ? ['mb-flix', '1movies'] : ['mb-flix', 'cdn', '1movies'];
+      var servers = ['mb-flix', 'cdn', '1movies'];
       var textDetail = null;
       var successfulUrl = '';
 

@@ -53,24 +53,37 @@
 
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
-      var url =
-        DOMAIN + '/mb-flix/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
-        '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
-        '&title=' + encTitle;
+      var servers = isTv ? ['mb-flix', '1movies'] : ['mb-flix', 'cdn', '1movies'];
+      var textDetail = null;
+      var successfulUrl = '';
 
-      if (year) {
-        url += '&year=' + year;
+      for (var i = 0; i < servers.length; i++) {
+        var server = servers[i];
+        var url =
+          DOMAIN + '/' + server + '/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
+          '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
+          '&title=' + encTitle;
+
+        if (year) {
+          url += '&year=' + year;
+        }
+
+        if (isTv) {
+          url += '&episodeId=' + episode + '&seasonId=' + season;
+        }
+
+        console.log(TAG + ' 🚀 Fetching sources from: ' + url);
+        textDetail = await fetchGet(url, headers);
+        if (textDetail && textDetail.trim() !== '') {
+          successfulUrl = url;
+          break; // Successfully found data
+        } else {
+          console.warn(TAG + ' ⚠️ Server ' + server + ' failed or returned empty');
+        }
       }
 
-      if (isTv) {
-        url += '&episodeId=' + episode + '&seasonId=' + season;
-      }
-
-      console.log(TAG + ' 🚀 Fetching sources: ' + url);
-
-      var textDetail = await fetchGet(url, headers);
       if (!textDetail || textDetail.trim() === '') {
-        console.warn(TAG + ' ❌ Empty response from videasy API');
+        console.warn(TAG + ' ❌ Empty response from all videasy servers');
         return null;
       }
 

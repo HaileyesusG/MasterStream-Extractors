@@ -1,9 +1,9 @@
 {
-  "version": 5,
+  "version": 6,
   "providers": {
     "Videasy": {
       "file": "extractors/VideasyExtractor.js",
-      "hash": "FA43FD9BF4A7C07034CC007C4935C51B"
+      "hash": "20932A4FA890813194C1642AA5327208"
     },
     "Vidlink": {
       "file": "extractors/VidlinkExtractor.js",

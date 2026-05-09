@@ -56,7 +56,7 @@
 
       var url =
         DOMAIN + '/mb-flix/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
-        '&year=2024&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
+        '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
         '&title=' + encTitle;
 
       if (isTv) {

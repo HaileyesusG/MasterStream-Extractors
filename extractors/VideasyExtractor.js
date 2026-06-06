@@ -7,8 +7,8 @@
  */
 (function () {
   var TAG = '[VideasyExtractor]';
-  var DOMAIN = 'https://api.videasy.net';
-  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 OPR/126.0.0.0 (Edition std-2)';
+  var DOMAIN = 'https://api.videasy.to';
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   async function fetchGet(url, headers) {
     try {
@@ -47,13 +47,14 @@
     try {
       var headers = {
         'User-Agent': USER_AGENT,
-        Referer: 'https://cineby.sc/',
-        Origin: 'https://cineby.sc',
+        Referer: 'https://player.videasy.to/',
+        Origin: 'https://player.videasy.to',
+        Accept: '*/*',
       };
 
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
-      var servers = ['mb-flix', 'cdn', '1movies'];
+      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd'];
       var textDetail = null;
       var successfulUrl = '';
 
@@ -167,8 +168,8 @@
 
       var streamHeaders = {
         'User-Agent': USER_AGENT,
-        Referer: 'https://cineby.sc/',
-        Origin: 'https://cineby.sc',
+        Referer: 'https://player.videasy.to/',
+        Origin: 'https://player.videasy.to',
       };
 
       return {

@@ -63,7 +63,7 @@
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
       // Try each server — only move on if decrypt returns empty/no sources
-      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd'];
+      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

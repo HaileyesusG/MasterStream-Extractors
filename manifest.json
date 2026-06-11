@@ -1,5 +1,5 @@
 {
-    "version":  10,
+    "version":  11,
     "providers":  {
                       "VidFast":  {
                                       "file":  "extractors/VidFastExtractor.js",
@@ -7,7 +7,7 @@
                                   },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "D5AD78EA7D43F3079C6D43EB197B50D9"
+                                      "hash":  "DE18D86BABD422192D9E36A8320075D0"
                                   },
                       "Vidlink":  {
                                       "file":  "extractors/VidlinkExtractor.js",

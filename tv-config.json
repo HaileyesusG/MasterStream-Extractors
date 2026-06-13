@@ -1,5 +1,15 @@
 {
-  "version": 2,
+  "version": 3,
+  "providerPriority": [
+    "Videasy",
+    "VidFast",
+    "Vidlink",
+    "OzTv",
+    "VidSrc",
+    "VixSrc",
+    "VidSrcCC",
+    "LordFlix"
+  ],
   "Videasy": {
     "domain": "https://api.videasy.to",
     "serverPath": "/mb-flix/sources-with-title",

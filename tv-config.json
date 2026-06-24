@@ -2,6 +2,7 @@
   "version": 3,
   "providerPriority": [
     "Vidlink",
+    "Videasy",
     "VidFast",
     "OzTv",
     "VidSrc",

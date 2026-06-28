@@ -1,9 +1,9 @@
 {
   "version": 12,
   "providerPriority": [
-    "VidFast",
-    "Vidlink",
     "Videasy",
+    "Vidlink",
+    "VidFast",
     "VidlinkSniffer",
     "OzTv",
     "VidSrc",

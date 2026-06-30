@@ -4,9 +4,6 @@
  *
  * To update: edit this file, run Update-Manifest.ps1, commit and push.
  * The app will pick it up within 1 hour (or on next cold start).
- *
- * Server priority order: neon is tried first (best quality/reliability).
- * To reprioritize, just reorder the `servers` array and push.
  */
 (function () {
   var TAG = '[VideasyExtractor]';
@@ -17,12 +14,12 @@
     try {
       var response = await fetch(url, { headers: headers, redirect: 'follow' });
       if (!response.ok) {
-        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for ' + url);
+        console.warn(TAG + ' HTTP ' + response.status + ' for ' + url);
         return null;
       }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' \u274c Network error: ' + e.message);
+      console.warn(TAG + ' Network error: ' + e.message);
       return null;
     }
   }
@@ -36,12 +33,12 @@
         redirect: 'follow',
       });
       if (!response.ok) {
-        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for POST ' + url);
+        console.warn(TAG + ' HTTP ' + response.status + ' for POST ' + url);
         return null;
       }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' \u274c Network error POST: ' + e.message);
+      console.warn(TAG + ' Network error POST: ' + e.message);
       return null;
     }
   }
@@ -65,11 +62,9 @@
 
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
-      // \u2500\u2500 Server priority order \u2014 edit here to change which server is tried first \u2500\u2500
-      // neon is first: it has the best quality and reliability.
-      var servers = ['neon', 'mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
+      // Try each server — only move on if decrypt returns empty/no sources
+      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
 
-      // Try each server \u2014 only move on if decrypt returns empty/no sources
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
         var url =
@@ -80,11 +75,11 @@
         if (year) url += '&year=' + year;
         if (isTv) url += '&episodeId=' + episode + '&seasonId=' + season;
 
-        console.log(TAG + ' \ud83d\ude80 [' + server + '] Fetching sources...');
+        console.log(TAG + ' [' + server + '] Fetching sources...');
         var textDetail = await fetchGet(url, headers);
 
         if (!textDetail || textDetail.trim() === '') {
-          console.warn(TAG + ' [' + server + '] Empty encrypted response \u2014 trying next server');
+          console.warn(TAG + ' [' + server + '] Empty encrypted response — trying next server');
           continue;
         }
         console.log(TAG + ' [' + server + '] Got encrypted data (len=' + textDetail.length + ')');
@@ -96,13 +91,13 @@
           decryptHeaders
         );
         if (!decryptResponse) {
-          console.warn(TAG + ' [' + server + '] Decrypt request failed \u2014 trying next server');
+          console.warn(TAG + ' [' + server + '] Decrypt request failed — trying next server');
           continue;
         }
 
         var decryptJson;
         try { decryptJson = JSON.parse(decryptResponse); } catch (_) {
-          console.warn(TAG + ' [' + server + '] Invalid decrypt JSON \u2014 trying next server');
+          console.warn(TAG + ' [' + server + '] Invalid decrypt JSON — trying next server');
           continue;
         }
 
@@ -110,11 +105,11 @@
         var sources = result && result.sources;
 
         if (!Array.isArray(sources) || sources.length === 0) {
-          console.warn(TAG + ' [' + server + '] No sources in decrypt result \u2014 trying next server');
+          console.warn(TAG + ' [' + server + '] No sources in decrypt result — trying next server');
           continue;
         }
 
-        // This server returned valid sources \u2014 parse and return
+        // This server returned valid sources — parse and return
         var directQuality = [];
         for (var j = 0; j < sources.length; j++) {
           var source = sources[j];
@@ -136,7 +131,7 @@
         }
 
         if (directQuality.length === 0) {
-          console.warn(TAG + ' [' + server + '] No valid quality variants \u2014 trying next server');
+          console.warn(TAG + ' [' + server + '] No valid quality variants — trying next server');
           continue;
         }
 
@@ -145,7 +140,7 @@
           return { url: q.file, quality: q.quality + 'p' };
         });
 
-        console.log(TAG + ' \u2705 [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        console.log(TAG + ' [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
           url: parsedQualities[0].url,
@@ -161,10 +156,10 @@
         };
       }
 
-      console.warn(TAG + ' \u274c All Videasy servers exhausted');
+      console.warn(TAG + ' All Videasy servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' \ud83d\udca5 Error during extraction', e);
+      console.error(TAG + ' Error during extraction', e);
       return null;
     }
   }

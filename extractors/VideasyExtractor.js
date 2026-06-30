@@ -63,9 +63,7 @@
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
       // Try each server — only move on if decrypt returns empty/no sources
-      // Server priority order — edit here to reprioritize without releasing an app update.
-      // neon is first: it has the best quality and reliability.
-      var servers = ['neon', 'mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
+      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
@@ -142,13 +140,7 @@
           return { url: q.file, quality: q.quality + 'p' };
         });
 
-        // 🔍 DIAGNOSTIC: log CDN domain so we can map API path → display server name
-        try {
-          var cdnHost = parsedQualities[0].url.split('/')[2];
-          console.log(TAG + ' \ud83d\udccc [' + server + '] CDN domain = ' + cdnHost);
-        } catch (_) {}
-
-        console.log(TAG + ' \u2705 [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        console.log(TAG + ' [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
           url: parsedQualities[0].url,

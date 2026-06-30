@@ -142,7 +142,13 @@
           return { url: q.file, quality: q.quality + 'p' };
         });
 
-        console.log(TAG + ' [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        // 🔍 DIAGNOSTIC: log CDN domain so we can map API path → display server name
+        try {
+          var cdnHost = parsedQualities[0].url.split('/')[2];
+          console.log(TAG + ' \ud83d\udccc [' + server + '] CDN domain = ' + cdnHost);
+        } catch (_) {}
+
+        console.log(TAG + ' \u2705 [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
           url: parsedQualities[0].url,

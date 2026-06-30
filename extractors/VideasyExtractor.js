@@ -63,7 +63,9 @@
       var encTitle = encodeURIComponent(encodeURIComponent(title));
 
       // Try each server — only move on if decrypt returns empty/no sources
-      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
+      // Server priority order — edit here to reprioritize without releasing an app update.
+      // neon is first: it has the best quality and reliability.
+      var servers = ['neon', 'mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

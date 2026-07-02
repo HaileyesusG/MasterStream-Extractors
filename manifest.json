@@ -1,37 +1,37 @@
 {
-  "version": 26,
-  "providerPriority": [
-    "VidSrcCC",
-    "VixSrc",
-    "VidFast",
-    "Vidlink",
-    "Videasy",
-    "VidlinkSniffer",
-    "OzTv",
-    "VidSrc",
-    "LordFlix",
-    "MyFlixerz"
-  ],
-  "providers": {
-    "VidFast": {
-      "file": "extractors/VidFastExtractor.js",
-      "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14"
-    },
-    "Videasy": {
-      "file": "extractors/VideasyExtractor.js",
-      "hash": "DE18D86BABD422192D9E36A8320075D0"
-    },
-    "Vidlink": {
-      "file": "extractors/VidlinkExtractor.js",
-      "hash": "4A4006C8B66AF952F8BADACD135039AC"
-    },
-    "VixSrc": {
-      "file": "extractors/VixSrcExtractor.js",
-      "hash": "B2D703972FCE1B9C10F6EA89F0C90A75"
-    },
-    "VidSrcCC": {
-      "file": "extractors/VidSrcCCExtractor.js",
-      "hash": "190D354183A99CD56840815BD743044F"
+    "version": 51,
+    "providerPriority": [
+        "VidSrcCC",
+        "VixSrc",
+        "VidFast",
+        "Vidlink",
+        "Videasy",
+        "OzTv",
+        "VidSrc",
+        "LordFlix",
+        "MyFlixerz",
+        "VidlinkSniffer"
+    ],
+    "providers": {
+        "VidFast": {
+            "file": "extractors/VidFastExtractor.js",
+            "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14"
+        },
+        "Videasy": {
+            "file": "extractors/VideasyExtractor.js",
+            "hash": "DE18D86BABD422192D9E36A8320075D0"
+        },
+        "Vidlink": {
+            "file": "extractors/VidlinkExtractor.js",
+            "hash": "4A4006C8B66AF952F8BADACD135039AC"
+        },
+        "VixSrc": {
+            "file": "extractors/VixSrcExtractor.js",
+            "hash": "B2D703972FCE1B9C10F6EA89F0C90A75"
+        },
+        "VidSrcCC": {
+            "file": "extractors/VidSrcCCExtractor.js",
+            "hash": "190D354183A99CD56840815BD743044F"
+        }
     }
-  }
 }

@@ -1,37 +1,37 @@
 {
-  "version": 19,
-  "providerPriority": [
-    "VidSrcCC",
-    "VidFast",
-    "Vidlink",
-    "Videasy",
-    "VidlinkSniffer",
-    "OzTv",
-    "VidSrc",
-    "VixSrc",
-    "LordFlix",
-    "MyFlixerz"
-  ],
-  "providers": {
-    "VidFast": {
-      "file": "extractors/VidFastExtractor.js",
-      "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14"
-    },
-    "Videasy": {
-      "file": "extractors/VideasyExtractor.js",
-      "hash": "DE18D86BABD422192D9E36A8320075D0"
-    },
-    "Vidlink": {
-      "file": "extractors/VidlinkExtractor.js",
-      "hash": "4A4006C8B66AF952F8BADACD135039AC"
-    },
-    "VixSrc": {
-      "file": "extractors/VixSrcExtractor.js",
-      "hash": "FB9A54BB957A7F10245ED186F5E2DDD2"
-    },
-    "VidSrcCC": {
-      "file": "extractors/VidSrcCCExtractor.js",
-      "hash": "8648D5F8D9078FF2DB6ECE392D9F1AD7"
-    }
-  }
+    "version":  20,
+    "providerPriority":  [
+                             "VidSrcCC",
+                             "VidFast",
+                             "Vidlink",
+                             "Videasy",
+                             "VidlinkSniffer",
+                             "OzTv",
+                             "VidSrc",
+                             "VixSrc",
+                             "LordFlix",
+                             "MyFlixerz"
+                         ],
+    "providers":  {
+                      "VidFast":  {
+                                      "file":  "extractors/VidFastExtractor.js",
+                                      "hash":  "4AB4FE0BEF515C260BCF5BF05DFC5F14"
+                                  },
+                      "Videasy":  {
+                                      "file":  "extractors/VideasyExtractor.js",
+                                      "hash":  "DE18D86BABD422192D9E36A8320075D0"
+                                  },
+                      "Vidlink":  {
+                                      "file":  "extractors/VidlinkExtractor.js",
+                                      "hash":  "4A4006C8B66AF952F8BADACD135039AC"
+                                  },
+                      "VixSrc":  {
+                                     "file":  "extractors/VixSrcExtractor.js",
+                                     "hash":  "FB9A54BB957A7F10245ED186F5E2DDD2"
+                                 },
+                      "VidSrcCC":  {
+                                       "file":  "extractors/VidSrcCCExtractor.js",
+                                       "hash":  "8648D5F8D9078FF2DB6ECE392D9F1AD7"
+                                   }
+                  }
 }

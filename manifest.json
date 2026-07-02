@@ -1,5 +1,5 @@
 {
-    "version": 52,
+    "version": 53,
     "providerPriority": [
         "VidSrcCC",
         "VixSrc",
@@ -15,7 +15,8 @@
     "providers": {
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14"
+            "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14",
+            "webBaseUrl": "https://vidfast.pro/"
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
@@ -27,7 +28,8 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "B2D703972FCE1B9C10F6EA89F0C90A75"
+            "hash": "B2D703972FCE1B9C10F6EA89F0C90A75",
+            "webBaseUrl": "https://vidcore.net/"
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",

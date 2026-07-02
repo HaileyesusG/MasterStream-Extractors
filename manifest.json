@@ -1,9 +1,9 @@
 {
     "version":  13,
     "providerPriority":  [
+                             "Vidlink",
                              "VidFast",
                              "Videasy",
-                             "Vidlink",
                              "VidlinkSniffer",
                              "OzTv",
                              "VidSrc",
@@ -31,7 +31,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "C99ED4627D389CBF5B27418D566B1FD7"
+                                       "hash":  "2FAFB07DFBC59945560D170D23F5601C"
                                    }
                   }
 }

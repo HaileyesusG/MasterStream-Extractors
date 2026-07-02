@@ -63,8 +63,25 @@
 
       var stream = data && data.stream;
 
-      if (!stream || !stream.playlist) {
-        console.warn(TAG + ' ❌ No playlist found in stream');
+      if (!stream) {
+        console.warn(TAG + ' ❌ No stream object in response. Keys: ' + Object.keys(data || {}).join(', '));
+        return null;
+      }
+
+      // Log stream structure so we can see what fields exist
+      console.log(TAG + ' 🔍 Stream keys: ' + Object.keys(stream).join(', '));
+
+      // Try all known field names for the playlist/stream URL
+      var playlistUrl = stream.playlist || stream.url || stream.file || stream.m3u8 || stream.hls || '';
+
+      // Some Vidlink responses use stream.sources = [{file, label}]
+      if (!playlistUrl && Array.isArray(stream.sources) && stream.sources.length > 0) {
+        playlistUrl = stream.sources[0].file || stream.sources[0].url || '';
+        console.log(TAG + ' 📋 Using stream.sources[0]: ' + playlistUrl.substring(0, 60));
+      }
+
+      if (!playlistUrl) {
+        console.warn(TAG + ' ❌ No playlist URL found. Stream: ' + JSON.stringify(stream).substring(0, 200));
         return null;
       }
 
@@ -82,7 +99,7 @@
       console.log(TAG + ' ✅ Successfully extracted stream URL (' + subtitles.length + ' subs)');
 
       return {
-        url: stream.playlist,
+        url: playlistUrl,
         quality: 'Auto',
         provider: 'Vidlink',
         headers: {

@@ -112,15 +112,23 @@
         }
 
         var encResult = encJson.result;
-        if (!encResult || !encResult.text || !encResult.sign) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing text/sign in enc response — trying next server');
+        if (!encResult || !encResult.url || !encResult.sign) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing url/sign in enc response — trying next server');
           continue;
         }
 
-        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text + sign');
+        // Step 2b: Fetch the encrypted script URL to get the actual encrypted text
+        console.log(TAG + ' \ud83d\udce5 [' + server + '] Fetching encrypted script...');
+        var encText = await fetchGet(encResult.url, { 'User-Agent': USER_AGENT, 'Referer': 'https://lordflix.org/', 'Origin': 'https://lordflix.org' });
+        if (!encText || encText.trim() === '') {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Empty encrypted script — trying next server');
+          continue;
+        }
+
+        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text (len=' + encText.length + ') + sign');
 
         // Step 3: Decrypt
-        var decBody = JSON.stringify({ text: encResult.text, sign: encResult.sign });
+        var decBody = JSON.stringify({ text: encText, sign: encResult.sign });
         var decHeaders = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',

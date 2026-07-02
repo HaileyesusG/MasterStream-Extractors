@@ -211,11 +211,10 @@
           var streamItem = streamArr[j];
 
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            // HLS stream — parse m3u8 to extract per-quality URLs
-            var hlsQualities = await parseM3u8Qualities(streamItem.playlist, { 'User-Agent': USER_AGENT, 'Referer': 'https://lordflix.org/', 'Origin': 'https://lordflix.org' });
-            for (var h = 0; h < hlsQualities.length; h++) {
-              directQuality.push(hlsQualities[h]);
-            }
+            // HLS adaptive stream — return master playlist as-is.
+            // ExoPlayer handles quality switching natively inside the m3u8.
+            // Individual variant URLs require CDN auth that can't be extracted.
+            directQuality.push({ file: streamItem.playlist, quality: 1080 });
 
           } else if (streamItem.type === 'file' && streamItem.qualities) {
             // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }

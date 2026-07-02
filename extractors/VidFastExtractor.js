@@ -35,8 +35,14 @@
       }
       var html = await pageRes.text();
 
-      // Extract the encrypted "en" text from page JSON
-      var match = html.match(/\\"en\\":\\"(.*?)\\"/);
+      // Extract the encrypted "en" text from page JSON.
+      // The page embeds encrypted data in two possible forms:
+      //   Form 1 (within a JSON string value): \"en\":\"ABC...\"
+      //   Form 2 (plain JS object):             "en":"ABC..."
+      // We try both — Form 1 is needed when the text is double-encoded;
+      // Form 2 is what OkHttpClient bridge returns (strings are already decoded).
+      var match = html.match(/\\"en\\":\\"(.*?)\\"/) ||
+                  html.match(/"en"\s*:\s*"([^"]+)"/);
       if (!match) {
         console.warn(TAG + ' ❌ Could not find encrypted text in page');
         return null;

@@ -55,8 +55,13 @@
         return null;
       }
 
-      // Extract text
-      var textMatch = htmlDetail.match(/\\"en\\":\\"(.*?)\\"/);
+      // Extract text.
+      // The page embeds encrypted data in two possible forms:
+      //   Form 1 (within a JSON string value): \"en\":\"ABC...\"
+      //   Form 2 (plain JS object):             "en":"ABC..."
+      // We try both — Form 2 is what OkHttpClient bridge returns (strings already decoded).
+      var textMatch = htmlDetail.match(/\\\"en\\\":\\\"(.*?)\\\"/) ||
+                      htmlDetail.match(/"en"\s*:\s*"([^"]+)"/);
       if (!textMatch || !textMatch[1]) {
         console.warn(TAG + ' ❌ No encrypted text found in page');
         return null;

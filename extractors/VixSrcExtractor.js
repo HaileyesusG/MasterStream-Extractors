@@ -81,18 +81,19 @@
       var streamUrl = encJson.result.stream;
       var token = encJson.result.token;
 
-      if (!serversUrl || !streamUrl || !token) {
-        console.warn(TAG + ' ❌ Missing servers, stream or token in API response');
+      if (!serversUrl || !streamUrl || token === null || token === undefined) {
+        console.warn(TAG + ' ❌ Missing servers or stream in API response');
         return null;
       }
+      console.log(TAG + ' 🔑 servers/stream/token received (token empty=' + (token === '') + ')');
 
-      // Update headers for server fetching
+      // Update headers for server fetching (only add CSRF token if non-empty)
       var apiHeaders = {
         'User-Agent': USER_AGENT,
         'Referer': DOMAIN + '/',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRF-Token': token
+        'X-Requested-With': 'XMLHttpRequest'
       };
+      if (token) apiHeaders['X-CSRF-Token'] = token;
 
       // Get streaming servers
       var serversEnc = await fetchPost(serversUrl, '', apiHeaders);

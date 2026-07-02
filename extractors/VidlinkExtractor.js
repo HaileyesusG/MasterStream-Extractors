@@ -68,22 +68,38 @@
         return null;
       }
 
-      // Log stream structure so we can see what fields exist
-      console.log(TAG + ' 🔍 Stream keys: ' + Object.keys(stream).join(', '));
-
-      // Try all known field names for the playlist/stream URL
-      var playlistUrl = stream.playlist || stream.url || stream.file || stream.m3u8 || stream.hls || '';
-
-      // Some Vidlink responses use stream.sources = [{file, label}]
-      if (!playlistUrl && Array.isArray(stream.sources) && stream.sources.length > 0) {
-        playlistUrl = stream.sources[0].file || stream.sources[0].url || '';
-        console.log(TAG + ' 📋 Using stream.sources[0]: ' + playlistUrl.substring(0, 60));
-      }
-
-      if (!playlistUrl) {
-        console.warn(TAG + ' ❌ No playlist URL found. Stream: ' + JSON.stringify(stream).substring(0, 200));
+      // Vidlink API returns stream.qualities = { "480": {type, url}, "720": {type, url}, ... }
+      var qualities = stream.qualities;
+      if (!qualities || typeof qualities !== 'object') {
+        console.warn(TAG + ' ❌ No qualities in stream. Keys: ' + Object.keys(stream).join(', '));
         return null;
       }
+
+      // Sort quality keys numerically descending (1080 > 720 > 480 etc.)
+      var qualityKeys = Object.keys(qualities).sort(function (a, b) {
+        return parseInt(b, 10) - parseInt(a, 10);
+      });
+
+      if (qualityKeys.length === 0) {
+        console.warn(TAG + ' ❌ qualities object is empty');
+        return null;
+      }
+
+      var parsedQualities = [];
+      for (var i = 0; i < qualityKeys.length; i++) {
+        var q = qualityKeys[i];
+        var entry = qualities[q];
+        var qUrl = entry && (entry.url || entry.file || '');
+        if (qUrl) parsedQualities.push({ url: qUrl, quality: q + 'p' });
+      }
+
+      if (parsedQualities.length === 0) {
+        console.warn(TAG + ' ❌ No valid URLs in qualities');
+        return null;
+      }
+
+      var bestUrl = parsedQualities[0].url;
+      console.log(TAG + ' ✅ Found ' + parsedQualities.length + ' quality variants, best: ' + qualityKeys[0] + 'p');
 
       // 3. Parse subtitles
       var subtitles = [];
@@ -99,8 +115,9 @@
       console.log(TAG + ' ✅ Successfully extracted stream URL (' + subtitles.length + ' subs)');
 
       return {
-        url: playlistUrl,
-        quality: 'Auto',
+        url: bestUrl,
+        quality: parsedQualities[0].quality,
+        qualities: parsedQualities,
         provider: 'Vidlink',
         headers: {
           'User-Agent': USER_AGENT,

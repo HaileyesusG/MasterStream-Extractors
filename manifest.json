@@ -1,5 +1,5 @@
 {
-    "version": 53,
+    "version": 54,
     "providerPriority": [
         "VidSrcCC",
         "VixSrc",
@@ -16,7 +16,8 @@
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
             "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14",
-            "webBaseUrl": "https://vidfast.pro/"
+            "navigateUrl": "https://vidfast.pro/movie/{tmdbId}",
+            "navigateUrlTv": "https://vidfast.pro/tv/{tmdbId}/{season}/{episode}"
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
@@ -29,7 +30,8 @@
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
             "hash": "B2D703972FCE1B9C10F6EA89F0C90A75",
-            "webBaseUrl": "https://vidcore.net/"
+            "navigateUrl": "https://vidcore.net/movie/{tmdbId}/",
+            "navigateUrlTv": "https://vidcore.net/tv/{tmdbId}/{season}/{episode}/"
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",

@@ -62,6 +62,43 @@
     }
   }
 
+  // Parse an HLS master playlist and return [{file, quality}] sorted desc
+  async function parseM3u8Qualities(playlistUrl, reqHeaders) {
+    try {
+      var m3u8 = await fetchGet(playlistUrl, reqHeaders);
+      if (!m3u8) return [{ file: playlistUrl, quality: 1080 }];
+
+      var lines = m3u8.split('\n');
+      var results = [];
+      var baseUrl = playlistUrl.substring(0, playlistUrl.lastIndexOf('/') + 1);
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
+          // Extract RESOLUTION=WxH
+          var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/);
+          var quality = resMatch ? parseInt(resMatch[2], 10) : 1080;
+          // Next non-empty line is the URL
+          var nextLine = '';
+          for (var j = i + 1; j < lines.length; j++) {
+            nextLine = lines[j].trim();
+            if (nextLine && nextLine.indexOf('#') !== 0) break;
+          }
+          if (nextLine) {
+            var segUrl = (nextLine.indexOf('http') === 0) ? nextLine : baseUrl + nextLine;
+            results.push({ file: segUrl, quality: quality });
+          }
+        }
+      }
+
+      if (results.length === 0) return [{ file: playlistUrl, quality: 1080 }];
+      results.sort(function (a, b) { return b.quality - a.quality; });
+      return results;
+    } catch (e) {
+      return [{ file: playlistUrl, quality: 1080 }];
+    }
+  }
+
   async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
       // English servers only (Solstice, Vienna, Lion are most reliable)
@@ -174,8 +211,11 @@
           var streamItem = streamArr[j];
 
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            // HLS stream — single URL
-            directQuality.push({ file: streamItem.playlist, quality: 1080 });
+            // HLS stream — parse m3u8 to extract per-quality URLs
+            var hlsQualities = await parseM3u8Qualities(streamItem.playlist, { 'User-Agent': USER_AGENT, 'Referer': 'https://lordflix.org/', 'Origin': 'https://lordflix.org' });
+            for (var h = 0; h < hlsQualities.length; h++) {
+              directQuality.push(hlsQualities[h]);
+            }
 
           } else if (streamItem.type === 'file' && streamItem.qualities) {
             // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }

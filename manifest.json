@@ -2,8 +2,8 @@
   "version": 19,
   "providerPriority": [
     "VidSrcCC",
-    "Vidlink",
     "VidFast",
+    "Vidlink",
     "Videasy",
     "VidlinkSniffer",
     "OzTv",

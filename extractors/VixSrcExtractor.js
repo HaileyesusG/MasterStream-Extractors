@@ -140,22 +140,29 @@
         try { decStreamJson = JSON.parse(decStreamRaw); } catch(e) { continue; }
 
         var result = decStreamJson.result;
-        if (!result || !result.sources || result.sources.length === 0) {
-          console.warn(TAG + ' ⚠️ No sources found for ' + srv.name);
+        if (!result) {
+          console.warn(TAG + ' \u26a0\ufe0f No result for ' + srv.name);
           continue;
         }
 
-        var directQuality = [];
-        for (var j = 0; j < result.sources.length; j++) {
-          var src = result.sources[j];
-          if (src.file) {
-            // Usually vidcore returns hls type with a single m3u8
-            var q = src.type === 'hls' ? 1080 : 1080; 
-            directQuality.push({ file: src.file, quality: q });
-          }
+        var streamFileUrl = null;
+
+        // Format 1: result.url (direct stream URL — used by Prime, etc.)
+        if (result.url) {
+          streamFileUrl = result.url;
+        }
+        // Format 2: result.sources[] array
+        else if (Array.isArray(result.sources) && result.sources.length > 0) {
+          streamFileUrl = result.sources[0].file || result.sources[0].url || null;
         }
 
-        if (directQuality.length === 0) continue;
+        if (!streamFileUrl) {
+          console.warn(TAG + ' \u26a0\ufe0f No stream URL found for ' + srv.name);
+          continue;
+        }
+
+        var directQuality = [{ file: streamFileUrl, quality: 1080 }];
+
 
         var subtitlesList = [];
         if (Array.isArray(result.tracks)) {

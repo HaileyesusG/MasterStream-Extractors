@@ -1,5 +1,5 @@
 {
-    "version":  25,
+    "version":  26,
     "providerPriority":  [
                              "VixSrc",
                              "VidSrcCC",
@@ -27,7 +27,7 @@
                                   },
                       "VixSrc":  {
                                      "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "62AA136A9390295FB4425C37D8FC405F"
+                                     "hash":  "B2D703972FCE1B9C10F6EA89F0C90A75"
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",

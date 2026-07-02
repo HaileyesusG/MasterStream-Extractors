@@ -1,5 +1,5 @@
 {
-    "version": 51,
+    "version": 52,
     "providerPriority": [
         "VidSrcCC",
         "VixSrc",
@@ -32,6 +32,18 @@
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
             "hash": "190D354183A99CD56840815BD743044F"
+        },
+        "LordFlix": {
+            "file": "extractors/LordFlixExtractor.js",
+            "hash": ""
+        },
+        "VidSrc": {
+            "file": "extractors/VidSrcExtractor.js",
+            "hash": ""
+        },
+        "OzTv": {
+            "file": "extractors/OzTvExtractor.js",
+            "hash": ""
         }
     }
 }

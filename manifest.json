@@ -1,5 +1,5 @@
 {
-    "version": 57,
+    "version": 59,
     "providerPriority": [
         "VidSrcCC",
         "VixSrc",
@@ -34,7 +34,7 @@
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
             "hash": "190D354183A99CD56840815BD743044F",
-            "nativeMode": true
+            "nativeMode": false
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",

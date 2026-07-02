@@ -1,6 +1,7 @@
 {
-  "version": 12,
+  "version": 14,
   "providerPriority": [
+    "VidSrcCC",
     "Vidlink",
     "VidFast",
     "Videasy",
@@ -8,7 +9,6 @@
     "OzTv",
     "VidSrc",
     "VixSrc",
-    "VidSrcCC",
     "LordFlix",
     "MyFlixerz"
   ],
@@ -31,7 +31,7 @@
     },
     "VidSrcCC": {
       "file": "extractors/VidSrcCCExtractor.js",
-      "hash": "AD0B0278E75386395011C4876D7E16ED"
+      "hash": "2FAFB07DFBC59945560D170D23F5601C"
     }
   }
 }

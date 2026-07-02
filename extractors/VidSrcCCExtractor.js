@@ -1,134 +1,213 @@
 /**
  * VidSrcCCExtractor — self-contained CommonJS JS for remote hot-update.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VidSrcCCExtractor.js
+ *
+ * ⚠️ VidSrcCC is dead. This slot is now powered by LordFlix (lordflix.org).
+ * It returns results under provider name "VidSrcCC" so the app doesn't need updating.
+ *
+ * Flow:
+ *  1. Build snowhouse.lordflix.club URL for movie/TV
+ *  2. GET enc-dec.app/api/enc-lordflix?url=... → { text, sign }
+ *  3. POST enc-dec.app/api/dec-lordflix with { text, sign } → sources + subtitles
+ *
+ * Servers (from https://snowhouse.lordflix.club/servers):
+ *   Solstice, Vienna, Lion, Phoenix, Luna  (English)
+ *   Rio (Portuguese), Moscow (Russian) — skipped
+ *
+ * To update server order: edit the `servers` array below and push to GitHub.
  */
 (function () {
   var TAG = '[VidSrcCCExtractor]';
-  var DOMAIN = 'https://vidsrc.cc';
-  var USER_AGENT =
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
+  var SNOWHOUSE = 'https://snowhouse.lordflix.club';
+  var ENC_DEC = 'https://enc-dec.app/api';
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
-  function regexFirst(input, pattern) {
-    var match = input.match(new RegExp(pattern, 'i'));
-    return match ? match[1] : null;
-  }
+  var HEADERS = {
+    'Accept': '*/*',
+    'Origin': 'https://lordflix.org',
+    'Referer': 'https://lordflix.org/',
+    'User-Agent': USER_AGENT,
+  };
 
-  async function fetchUrl(url, headers) {
+  async function fetchGet(url, headers) {
     try {
-      var fetchHeaders = Object.assign({ 'User-Agent': USER_AGENT }, headers || {});
-      var response = await fetch(url, { headers: fetchHeaders, redirect: 'follow' });
+      var response = await fetch(url, { headers: headers || HEADERS, redirect: 'follow' });
       if (!response.ok) {
-        console.warn(TAG + ' ❌ HTTP ' + response.status + ' for ' + url);
+        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for ' + url);
         return null;
       }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' ❌ Network error: ' + e.message);
+      console.warn(TAG + ' \u274c Network error: ' + e.message);
+      return null;
+    }
+  }
+
+  async function fetchPost(url, body, headers) {
+    try {
+      var response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: body,
+        redirect: 'follow',
+      });
+      if (!response.ok) {
+        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for POST ' + url);
+        return null;
+      }
+      return await response.text();
+    } catch (e) {
+      console.warn(TAG + ' \u274c Network error POST: ' + e.message);
       return null;
     }
   }
 
   async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
-      var headers = {
-        'User-Agent': USER_AGENT,
-        Referer: DOMAIN + '/',
-        Origin: DOMAIN,
-      };
+      // English servers only (Solstice, Vienna, Lion are most reliable)
+      var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna'];
 
-      var urlDetail = isTv
-        ? DOMAIN + '/v2/embed/tv/' + tmdbId + '/' + season + '/' + episode + '?autoPlay=false'
-        : DOMAIN + '/v2/embed/movie/' + tmdbId + '?autoPlay=false';
+      for (var i = 0; i < servers.length; i++) {
+        var server = servers[i];
 
-      console.log(TAG + ' 🚀 Fetching embed: ' + urlDetail);
+        // Step 1: Build snowhouse URL
+        var snowhouseUrl;
+        if (isTv) {
+          snowhouseUrl = SNOWHOUSE + '/?type=series' +
+            '&imdb=' + (imdbId || '') +
+            '&tmdb=' + tmdbId +
+            '&server=' + server +
+            '&season=' + season +
+            '&episode=' + episode;
+        } else {
+          snowhouseUrl = SNOWHOUSE + '/?type=movie' +
+            '&imdb=' + (imdbId || '') +
+            '&tmdb=' + tmdbId +
+            '&server=' + server;
+        }
 
-      var textDetail = await fetchUrl(urlDetail, headers);
-      if (!textDetail) return null;
+        console.log(TAG + ' \ud83d\ude80 Trying server: ' + server);
 
-      var userId = regexFirst(textDetail, 'userId *= *"([^"]+)');
-      if (!userId) { console.warn(TAG + ' ❌ No userId found'); return null; }
-      console.log(TAG + ' 🔍 Found userId: ' + userId);
+        // Step 2: Encrypt (get text + sign from enc-dec.app)
+        var encUrl = ENC_DEC + '/enc-lordflix?url=' + encodeURIComponent(snowhouseUrl);
+        var encRaw = await fetchGet(encUrl, {
+          'Accept': 'application/json',
+          'User-Agent': USER_AGENT,
+        });
 
-      var v = regexFirst(textDetail, 'var *v *= *"([^"]+)');
-      if (!v) { console.warn(TAG + ' ❌ No v found'); return null; }
-      console.log(TAG + ' 🔍 Found v: ' + v);
+        if (!encRaw) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] enc-lordflix returned null — trying next server');
+          continue;
+        }
 
-      var reversedKey = 'BxRJ3LYEj2'.split('').reverse().join('');
-      var vrfUrl = 'https://aquariumtv.app/vidsrccc?id=' + tmdbId + '&user_id=' + reversedKey + '_' + userId;
-      console.log(TAG + ' 🔑 Fetching VRF from: ' + vrfUrl);
+        var encJson;
+        try { encJson = JSON.parse(encRaw); } catch (_) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Failed to parse enc response — trying next server');
+          continue;
+        }
 
-      var vrf = await fetchUrl(vrfUrl, {});
-      if (!vrf || vrf.trim() === '') { console.warn(TAG + ' ❌ Empty VRF response'); return null; }
-      console.log(TAG + ' 🔑 Got VRF (len=' + vrf.length + ')');
+        if (encJson.status !== 200) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] enc-lordflix status=' + encJson.status + ' — trying next server');
+          continue;
+        }
 
-      headers['Referer'] = urlDetail;
-      var cleanVrf = encodeURIComponent(vrf.trim());
-      var apiUrl = DOMAIN + '/api/' + tmdbId + '/servers?id=' + tmdbId +
-        '&type=' + (isTv ? 'tv' : 'movie') + '&v=' + v + '&vrf=' + cleanVrf + '&imdbId=' + (imdbId || '');
-      console.log(TAG + ' 📡 Fetching servers: ' + apiUrl);
+        var encResult = encJson.result;
+        if (!encResult || !encResult.text || !encResult.sign) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing text/sign in enc response — trying next server');
+          continue;
+        }
 
-      var srcIdsJson = await fetchUrl(apiUrl, headers);
-      if (!srcIdsJson) return null;
+        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text + sign');
 
-      var srcIdsObj;
-      try { srcIdsObj = JSON.parse(srcIdsJson); } catch (_) {
-        console.error(TAG + ' ❌ Failed to parse servers JSON'); return null;
-      }
+        // Step 3: Decrypt
+        var decBody = JSON.stringify({ text: encResult.text, sign: encResult.sign });
+        var decHeaders = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': USER_AGENT,
+          'Origin': 'https://lordflix.org',
+          'Referer': 'https://lordflix.org/',
+        };
 
-      var dataArr = srcIdsObj && srcIdsObj.data;
-      if (!Array.isArray(dataArr) || dataArr.length === 0) {
-        console.warn(TAG + ' ❌ No server data found'); return null;
-      }
+        var decRaw = await fetchPost(ENC_DEC + '/dec-lordflix', decBody, decHeaders);
+        if (!decRaw) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] dec-lordflix failed — trying next server');
+          continue;
+        }
 
-      for (var i = 0; i < dataArr.length; i++) {
-        var item = dataArr[i];
-        var hash = item.hash || '';
-        if (!hash) continue;
+        var decJson;
+        try { decJson = JSON.parse(decRaw); } catch (_) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Failed to parse dec response — trying next server');
+          continue;
+        }
 
-        var directUrl = DOMAIN + '/api/source/' + hash;
-        console.log(TAG + ' 📡 Fetching source: ' + directUrl);
+        if (decJson.status !== 200) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] dec-lordflix status=' + decJson.status + ': ' + (decJson.error || '') + ' — trying next server');
+          continue;
+        }
 
-        var resJson = await fetchUrl(directUrl, headers);
-        if (!resJson) continue;
+        var result = decJson.result;
+        if (!result) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No result in dec response — trying next server');
+          continue;
+        }
 
-        var resObj;
-        try { resObj = JSON.parse(resJson); } catch (_) { continue; }
+        // Parse sources
+        var sources = result.sources || result.streams || [];
+        if (!Array.isArray(sources) || sources.length === 0) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No sources in result — trying next server');
+          continue;
+        }
 
-        var resData = resObj && resObj.data;
-        if (!resData) continue;
+        var directQuality = [];
+        for (var j = 0; j < sources.length; j++) {
+          var src = sources[j];
+          var srcUrl = src.url || src.file || src.stream || '';
+          var qualityStr = src.quality || src.label || '1080';
+          var qualityMatch = qualityStr.toString().match(/(\d+)/);
+          var quality = qualityMatch ? parseInt(qualityMatch[1], 10) : 1080;
+          if (srcUrl) directQuality.push({ file: srcUrl, quality: quality });
+        }
 
-        var sourceUrl = resData.source || '';
-        if (!sourceUrl) continue;
+        if (directQuality.length === 0) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid source URLs — trying next server');
+          continue;
+        }
 
+        directQuality.sort(function (a, b) { return b.quality - a.quality; });
+
+        // Parse subtitles
         var subtitlesList = [];
-        if (Array.isArray(resData.subtitles)) {
-          for (var j = 0; j < resData.subtitles.length; j++) {
-            var sub = resData.subtitles[j];
-            var label = sub.label || '';
-            if (!label) continue;
-            var parseLangMatch = label.match(/([A-Za-z0-9]+)/);
-            var parseLang = parseLangMatch ? parseLangMatch[1].trim() : '';
-            var file = sub.file || '';
-            if (file && parseLang) {
-              subtitlesList.push({ url: file, lang: parseLang, label: parseLang });
-            }
+        var subs = result.subtitles || result.captions || [];
+        if (Array.isArray(subs)) {
+          for (var k = 0; k < subs.length; k++) {
+            var sub = subs[k];
+            var subUrl = sub.url || sub.file || '';
+            var lang = sub.language || sub.label || sub.lang || 'Unknown';
+            if (subUrl) subtitlesList.push({ url: subUrl, lang: lang, label: lang });
           }
         }
 
-        console.log(TAG + ' ✅ Found source + ' + subtitlesList.length + ' subtitles');
+        console.log(TAG + ' \u2705 [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
+
         return {
-          url: sourceUrl,
-          quality: '1080p',
+          url: directQuality[0].file,
+          quality: directQuality[0].quality + 'p',
+          qualities: directQuality.map(function (q) { return { url: q.file, quality: q.quality + 'p' }; }),
           provider: 'VidSrcCC',
-          headers: headers,
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Referer': 'https://lordflix.org/',
+            'Origin': 'https://lordflix.org',
+          },
           subtitles: subtitlesList,
         };
       }
 
-      console.warn(TAG + ' ❌ No sources found from any server hash');
+      console.warn(TAG + ' \u274c All LordFlix servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' 💥 Error during extraction', e);
+      console.error(TAG + ' \ud83d\udca5 Error during extraction', e);
       return null;
     }
   }

@@ -62,6 +62,43 @@
     }
   }
 
+  // Parse an HLS master playlist and return [{file, quality}] sorted desc
+  async function parseM3u8Qualities(playlistUrl, reqHeaders) {
+    try {
+      var m3u8 = await fetchGet(playlistUrl, reqHeaders);
+      if (!m3u8) return [{ file: playlistUrl, quality: 1080 }];
+
+      var lines = m3u8.split('\n');
+      var results = [];
+      var baseUrl = playlistUrl.substring(0, playlistUrl.lastIndexOf('/') + 1);
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
+          // Extract RESOLUTION=WxH
+          var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/);
+          var quality = resMatch ? parseInt(resMatch[2], 10) : 1080;
+          // Next non-empty line is the URL
+          var nextLine = '';
+          for (var j = i + 1; j < lines.length; j++) {
+            nextLine = lines[j].trim();
+            if (nextLine && nextLine.indexOf('#') !== 0) break;
+          }
+          if (nextLine) {
+            var segUrl = (nextLine.indexOf('http') === 0) ? nextLine : baseUrl + nextLine;
+            results.push({ file: segUrl, quality: quality });
+          }
+        }
+      }
+
+      if (results.length === 0) return [{ file: playlistUrl, quality: 1080 }];
+      results.sort(function (a, b) { return b.quality - a.quality; });
+      return results;
+    } catch (e) {
+      return [{ file: playlistUrl, quality: 1080 }];
+    }
+  }
+
   async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
       // English servers only (Solstice, Vienna, Lion are most reliable)
@@ -112,15 +149,23 @@
         }
 
         var encResult = encJson.result;
-        if (!encResult || !encResult.text || !encResult.sign) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing text/sign in enc response — trying next server');
+        if (!encResult || !encResult.url || !encResult.sign) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing url/sign in enc response — trying next server');
           continue;
         }
 
-        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text + sign');
+        // Step 2b: Fetch the encrypted script URL to get the actual encrypted text
+        console.log(TAG + ' \ud83d\udce5 [' + server + '] Fetching encrypted script...');
+        var encText = await fetchGet(encResult.url, { 'User-Agent': USER_AGENT, 'Referer': 'https://lordflix.org/', 'Origin': 'https://lordflix.org' });
+        if (!encText || encText.trim() === '') {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Empty encrypted script — trying next server');
+          continue;
+        }
+
+        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text (len=' + encText.length + ') + sign');
 
         // Step 3: Decrypt
-        var decBody = JSON.stringify({ text: encResult.text, sign: encResult.sign });
+        var decBody = JSON.stringify({ text: encText, sign: encResult.sign });
         var decHeaders = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -147,46 +192,60 @@
         }
 
         var result = decJson.result;
-        if (!result) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No result in dec response — trying next server');
+        if (!result || result.error) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Server error: ' + (result && result.error ? result.error : 'no result') + ' — trying next server');
           continue;
         }
 
-        // Parse sources
-        var sources = result.sources || result.streams || [];
-        if (!Array.isArray(sources) || sources.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No sources in result — trying next server');
+        // LordFlix returns: { stream: [{ id, type, playlist?, qualities?, captions? }] }
+        var streamArr = result.stream;
+        if (!Array.isArray(streamArr) || streamArr.length === 0) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No stream array in result — trying next server');
           continue;
         }
 
         var directQuality = [];
-        for (var j = 0; j < sources.length; j++) {
-          var src = sources[j];
-          var srcUrl = src.url || src.file || src.stream || '';
-          var qualityStr = src.quality || src.label || '1080';
-          var qualityMatch = qualityStr.toString().match(/(\d+)/);
-          var quality = qualityMatch ? parseInt(qualityMatch[1], 10) : 1080;
-          if (srcUrl) directQuality.push({ file: srcUrl, quality: quality });
+        var subtitlesList = [];
+
+        for (var j = 0; j < streamArr.length; j++) {
+          var streamItem = streamArr[j];
+
+          if (streamItem.type === 'hls' && streamItem.playlist) {
+            // HLS adaptive stream — return master playlist as-is.
+            // ExoPlayer handles quality switching natively inside the m3u8.
+            // Individual variant URLs require CDN auth that can't be extracted.
+            directQuality.push({ file: streamItem.playlist, quality: 1080 });
+
+          } else if (streamItem.type === 'file' && streamItem.qualities) {
+            // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }
+            var qualKeys = Object.keys(streamItem.qualities);
+            for (var q = 0; q < qualKeys.length; q++) {
+              var qKey = qualKeys[q];
+              var qObj = streamItem.qualities[qKey];
+              var qUrl = qObj && (qObj.url || qObj.file || '');
+              var qNum = parseInt(qKey, 10) || 1080;
+              if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
+            }
+          }
+
+          // Parse captions from each stream item
+          var caps = streamItem.captions || streamItem.subtitles || [];
+          if (Array.isArray(caps)) {
+            for (var k = 0; k < caps.length; k++) {
+              var cap = caps[k];
+              var capUrl = cap.url || cap.file || '';
+              var capLang = cap.language || cap.label || cap.lang || 'Unknown';
+              if (capUrl) subtitlesList.push({ url: capUrl, lang: capLang, label: capLang });
+            }
+          }
         }
 
         if (directQuality.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid source URLs — trying next server');
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid quality URLs — trying next server');
           continue;
         }
 
         directQuality.sort(function (a, b) { return b.quality - a.quality; });
-
-        // Parse subtitles
-        var subtitlesList = [];
-        var subs = result.subtitles || result.captions || [];
-        if (Array.isArray(subs)) {
-          for (var k = 0; k < subs.length; k++) {
-            var sub = subs[k];
-            var subUrl = sub.url || sub.file || '';
-            var lang = sub.language || sub.label || sub.lang || 'Unknown';
-            if (subUrl) subtitlesList.push({ url: subUrl, lang: lang, label: lang });
-          }
-        }
 
         console.log(TAG + ' \u2705 [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
 

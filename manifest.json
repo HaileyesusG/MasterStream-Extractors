@@ -34,7 +34,7 @@
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
             "hash": "190D354183A99CD56840815BD743044F",
-            "nativeMode": false
+            "nativeMode": true
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",

@@ -1,5 +1,5 @@
 {
-    "version":  15,
+    "version":  16,
     "providerPriority":  [
                              "VidSrcCC",
                              "Vidlink",
@@ -31,7 +31,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "E36210CA0AA542F8AEC3CF036FA1DDF0"
+                                       "hash":  "3DD2045F9AD27EE76293DBB193053CEC"
                                    }
                   }
 }

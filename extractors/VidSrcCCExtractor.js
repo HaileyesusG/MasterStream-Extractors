@@ -160,8 +160,12 @@
           continue;
         }
 
+        // DEBUG: log the result keys + first 400 chars to identify structure
+        console.log(TAG + ' \ud83d\udd0d [' + server + '] dec result keys: ' + Object.keys(result).join(', '));
+        console.log(TAG + ' \ud83d\udd0d [' + server + '] dec result preview: ' + JSON.stringify(result).substring(0, 400));
+
         // Parse sources
-        var sources = result.sources || result.streams || [];
+        var sources = result.sources || result.streams || result.data || result.videos || result.files || [];
         if (!Array.isArray(sources) || sources.length === 0) {
           console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No sources in result — trying next server');
           continue;

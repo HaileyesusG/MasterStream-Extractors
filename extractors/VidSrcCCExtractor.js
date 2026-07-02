@@ -211,43 +211,9 @@
           var streamItem = streamArr[j];
 
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            var masterUrl = streamItem.playlist;
-            // Always keep master URL as primary (validates OK, adaptive ABR)
-            directQuality.push({ file: masterUrl, quality: -1, label: 'Auto' });
-
-            // Try to fetch m3u8 WITHOUT Origin header (avoid CORS preflight in WebView)
-            var m3u8Text = await fetchGet(masterUrl, {
-              'User-Agent': USER_AGENT,
-              'Referer': 'https://lordflix.org/'
-            });
-
-            if (m3u8Text && m3u8Text.indexOf('#EXT-X-STREAM-INF') >= 0) {
-              // It's a master playlist — parse quality variants
-              var m3u8Lines = m3u8Text.split('\n');
-              var baseUrl = masterUrl.indexOf('?') >= 0
-                ? masterUrl.substring(0, masterUrl.lastIndexOf('/', masterUrl.indexOf('?')) + 1)
-                : masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-
-              console.log(TAG + ' \ud83c\udfb5 [' + server + '] Parsing HLS master playlist (' + m3u8Lines.length + ' lines)');
-              for (var mi = 0; mi < m3u8Lines.length; mi++) {
-                var mline = m3u8Lines[mi].trim();
-                if (mline.indexOf('#EXT-X-STREAM-INF') === 0) {
-                  var mRes = mline.match(/RESOLUTION=(\d+)x(\d+)/);
-                  var mQuality = mRes ? parseInt(mRes[2], 10) : 0;
-                  for (var mj = mi + 1; mj < m3u8Lines.length; mj++) {
-                    var mNext = m3u8Lines[mj].trim();
-                    if (mNext && mNext.indexOf('#') !== 0) {
-                      var mUrl = mNext.indexOf('http') === 0 ? mNext : baseUrl + mNext;
-                      directQuality.push({ file: mUrl, quality: mQuality, label: mQuality + 'p' });
-                      break;
-                    }
-                  }
-                }
-              }
-              console.log(TAG + ' \ud83c\udfaf [' + server + '] Parsed ' + (directQuality.length - 1) + ' quality variants from m3u8');
-            } else {
-              console.log(TAG + ' \u2139\ufe0f [' + server + '] HLS: m3u8 not accessible from JS (CORS) — using Auto only');
-            }
+            // HLS adaptive stream — master playlist URL returned as-is.
+            // ExoPlayer handles quality switching via adaptive bitrate.
+            directQuality.push({ file: streamItem.playlist, quality: 1080 });
 
           } else if (streamItem.type === 'file' && streamItem.qualities) {
             // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }
@@ -257,7 +223,7 @@
               var qObj = streamItem.qualities[qKey];
               var qUrl = qObj && (qObj.url || qObj.file || '');
               var qNum = parseInt(qKey, 10) || 1080;
-              if (qUrl) directQuality.push({ file: qUrl, quality: qNum, label: qNum + 'p' });
+              if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
             }
           }
 
@@ -278,31 +244,14 @@
           continue;
         }
 
-        // Sort: highest quality first, Auto (-1) last
         directQuality.sort(function (a, b) { return b.quality - a.quality; });
-
-        // For HLS: primary url = master playlist (validates at HTTP 200)
-        // For file: primary url = highest quality file
-        var primaryUrl = directQuality[directQuality.length - 1].label === 'Auto'
-          ? directQuality[directQuality.length - 1].file   // master is last after sort (quality=-1)
-          : directQuality[0].file;
-
-        // If there are variants, rearrange: variants first, Auto last
-        var hlsMaster = null;
-        var variants = directQuality.filter(function(q) { return q.quality === -1; });
-        if (variants.length > 0) {
-          hlsMaster = variants[0];
-          directQuality = directQuality.filter(function(q) { return q.quality !== -1; });
-          directQuality.push(hlsMaster); // Auto goes to end of quality list
-          primaryUrl = hlsMaster.file;   // master URL = what gets validated
-        }
 
         console.log(TAG + ' \u2705 [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
-          url: primaryUrl,
-          quality: directQuality[0] ? (directQuality[0].label || directQuality[0].quality + 'p') : 'Auto',
-          qualities: directQuality.map(function (q) { return { url: q.file, quality: q.label || q.quality + 'p' }; }),
+          url: directQuality[0].file,
+          quality: directQuality[0].quality + 'p',
+          qualities: directQuality.map(function (q) { return { url: q.file, quality: q.quality + 'p' }; }),
           provider: 'VidSrcCC',
           headers: {
             'User-Agent': USER_AGENT,

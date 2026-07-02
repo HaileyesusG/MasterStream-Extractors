@@ -1,5 +1,5 @@
 {
-    "version":  21,
+    "version":  22,
     "providerPriority":  [
                              "VidSrcCC",
                              "VidFast",
@@ -31,7 +31,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "960DECFA3C591CF3CC008D77ACA45813"
+                                       "hash":  "190D354183A99CD56840815BD743044F"
                                    }
                   }
 }

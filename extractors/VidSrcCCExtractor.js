@@ -102,7 +102,7 @@
   async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
       // English servers only (Solstice, Vienna, Lion are most reliable)
-      var servers = ['Lion', 'Vienna', 'Solstice', 'Phoenix', 'Luna'];
+      var servers = ['Lion', 'Solstice', 'Vienna', 'Phoenix', 'Luna'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

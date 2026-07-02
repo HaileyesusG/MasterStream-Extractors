@@ -155,50 +155,58 @@
         }
 
         var result = decJson.result;
-        if (!result) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No result in dec response — trying next server');
+        if (!result || result.error) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Server error: ' + (result && result.error ? result.error : 'no result') + ' — trying next server');
           continue;
         }
 
-        // DEBUG: log the result keys + first 400 chars to identify structure
-        console.log(TAG + ' \ud83d\udd0d [' + server + '] dec result keys: ' + Object.keys(result).join(', '));
-        console.log(TAG + ' \ud83d\udd0d [' + server + '] dec result preview: ' + JSON.stringify(result).substring(0, 400));
-
-        // Parse sources
-        var sources = result.sources || result.streams || result.data || result.videos || result.files || [];
-        if (!Array.isArray(sources) || sources.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No sources in result — trying next server');
+        // LordFlix returns: { stream: [{ id, type, playlist?, qualities?, captions? }] }
+        var streamArr = result.stream;
+        if (!Array.isArray(streamArr) || streamArr.length === 0) {
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No stream array in result — trying next server');
           continue;
         }
 
         var directQuality = [];
-        for (var j = 0; j < sources.length; j++) {
-          var src = sources[j];
-          var srcUrl = src.url || src.file || src.stream || '';
-          var qualityStr = src.quality || src.label || '1080';
-          var qualityMatch = qualityStr.toString().match(/(\d+)/);
-          var quality = qualityMatch ? parseInt(qualityMatch[1], 10) : 1080;
-          if (srcUrl) directQuality.push({ file: srcUrl, quality: quality });
+        var subtitlesList = [];
+
+        for (var j = 0; j < streamArr.length; j++) {
+          var streamItem = streamArr[j];
+
+          if (streamItem.type === 'hls' && streamItem.playlist) {
+            // HLS stream — single URL
+            directQuality.push({ file: streamItem.playlist, quality: 1080 });
+
+          } else if (streamItem.type === 'file' && streamItem.qualities) {
+            // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }
+            var qualKeys = Object.keys(streamItem.qualities);
+            for (var q = 0; q < qualKeys.length; q++) {
+              var qKey = qualKeys[q];
+              var qObj = streamItem.qualities[qKey];
+              var qUrl = qObj && (qObj.url || qObj.file || '');
+              var qNum = parseInt(qKey, 10) || 1080;
+              if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
+            }
+          }
+
+          // Parse captions from each stream item
+          var caps = streamItem.captions || streamItem.subtitles || [];
+          if (Array.isArray(caps)) {
+            for (var k = 0; k < caps.length; k++) {
+              var cap = caps[k];
+              var capUrl = cap.url || cap.file || '';
+              var capLang = cap.language || cap.label || cap.lang || 'Unknown';
+              if (capUrl) subtitlesList.push({ url: capUrl, lang: capLang, label: capLang });
+            }
+          }
         }
 
         if (directQuality.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid source URLs — trying next server');
+          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid quality URLs — trying next server');
           continue;
         }
 
         directQuality.sort(function (a, b) { return b.quality - a.quality; });
-
-        // Parse subtitles
-        var subtitlesList = [];
-        var subs = result.subtitles || result.captions || [];
-        if (Array.isArray(subs)) {
-          for (var k = 0; k < subs.length; k++) {
-            var sub = subs[k];
-            var subUrl = sub.url || sub.file || '';
-            var lang = sub.language || sub.label || sub.lang || 'Unknown';
-            if (subUrl) subtitlesList.push({ url: subUrl, lang: lang, label: lang });
-          }
-        }
 
         console.log(TAG + ' \u2705 [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
 

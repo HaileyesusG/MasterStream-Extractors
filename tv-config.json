@@ -1,26 +1,26 @@
 {
-  "version": 3,
-  "providerPriority": [
-    "VidFast",
-    "Videasy",
-    "Vidlink",
-    "OzTv",
-    "VidSrc",
-    "VixSrc",
-    "VidSrcCC",
-    "LordFlix"
-  ],
-  "Videasy": {
-    "domain": "https://api.videasy.to",
-    "serverPath": "/mb-flix/sources-with-title",
-    "decryptUrl": "https://enc-dec.app/api/dec-videasy",
-    "referer": "https://player.videasy.to/",
-    "origin": "https://player.videasy.to",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-  },
-  "Vidlink": {
-    "baseUrl": "https://vidlink.pro",
-    "encApi": "https://enc-dec.app/api/enc-vidlink",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-  }
+    "version":  4,
+    "providerPriority":  [
+                             "VidSrcCC",
+                             "VidFast",
+                             "Videasy",
+                             "Vidlink",
+                             "OzTv",
+                             "VidSrc",
+                             "VixSrc",
+                             "LordFlix"
+                         ],
+    "Videasy":  {
+                    "domain":  "https://api.videasy.to",
+                    "serverPath":  "/mb-flix/sources-with-title",
+                    "decryptUrl":  "https://enc-dec.app/api/dec-videasy",
+                    "referer":  "https://player.videasy.to/",
+                    "origin":  "https://player.videasy.to",
+                    "userAgent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+                },
+    "Vidlink":  {
+                    "baseUrl":  "https://vidlink.pro",
+                    "encApi":  "https://enc-dec.app/api/enc-vidlink",
+                    "userAgent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                }
 }

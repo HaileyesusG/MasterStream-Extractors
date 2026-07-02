@@ -1,6 +1,7 @@
 {
-    "version":  13,
+    "version":  14,
     "providerPriority":  [
+                             "VidSrcCC",
                              "Vidlink",
                              "VidFast",
                              "Videasy",
@@ -8,7 +9,6 @@
                              "OzTv",
                              "VidSrc",
                              "VixSrc",
-                             "VidSrcCC",
                              "LordFlix",
                              "MyFlixerz"
                          ],

@@ -1,5 +1,5 @@
 {
-    "version": 54,
+    "version": 56,
     "providerPriority": [
         "VidSrcCC",
         "VixSrc",
@@ -16,8 +16,7 @@
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
             "hash": "4AB4FE0BEF515C260BCF5BF05DFC5F14",
-            "navigateUrl": "https://vidfast.pro/movie/{tmdbId}",
-            "navigateUrlTv": "https://vidfast.pro/tv/{tmdbId}/{season}/{episode}"
+            "nativeMode": true
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
@@ -30,12 +29,12 @@
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
             "hash": "B2D703972FCE1B9C10F6EA89F0C90A75",
-            "navigateUrl": "https://vidcore.net/movie/{tmdbId}/",
-            "navigateUrlTv": "https://vidcore.net/tv/{tmdbId}/{season}/{episode}/"
+            "nativeMode": true
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "190D354183A99CD56840815BD743044F"
+            "hash": "190D354183A99CD56840815BD743044F",
+            "nativeMode": false
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",

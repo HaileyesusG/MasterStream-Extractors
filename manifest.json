@@ -3,7 +3,7 @@
     "providerPriority": [
         
          "VidFast",
-         "Vidlink",
+         "Vidlink"
     ],
     "providers": {
         "VidFast": {

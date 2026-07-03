@@ -2,11 +2,6 @@
     "version": 70,
     "providerPriority": [
         "Vidlink",
-        "OzTv",
-        "VidSrc",
-        "LordFlix",
-        "MyFlixerz",
-        "VidlinkSniffer"
     ],
     "providers": {
         "VidFast": {

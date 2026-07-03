@@ -1,7 +1,9 @@
 {
     "version": 71,
     "providerPriority": [
-        "Vidlink",
+        
+         "VidFast",
+         "Vidlink",
     ],
     "providers": {
         "VidFast": {

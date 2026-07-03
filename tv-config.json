@@ -2,10 +2,6 @@
   "version": 53,
   "providerPriority": [
     "Vidlink",
-    "VidSrcCC",
-    "VixSrc",
-    "Videasy",
-    "VidFast",
     "OzTv",
     "VidSrc",
     "LordFlix"

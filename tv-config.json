@@ -2,7 +2,7 @@
   "version": 56,
   "providerPriority": [
     "VidFast",
-    "Vidlink",
+    "Vidlink"
   ],
   "Videasy": {
     "domain": "https://api.videasy.to",

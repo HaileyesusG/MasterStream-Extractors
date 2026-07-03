@@ -1,6 +1,7 @@
 {
   "version": 55,
   "providerPriority": [
+    "VidFast",
     "Vidlink",
   ],
   "Videasy": {

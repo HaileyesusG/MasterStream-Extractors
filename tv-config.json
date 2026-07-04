@@ -2,8 +2,8 @@
   "version": 59,
   "providerPriority": [
     "Vidlink",
-    "VixSrc",
-    "VidFast"
+    "VidFast",
+    "VixSrc"
   ],
   "Videasy": {
     "domain": "https://api.videasy.to",

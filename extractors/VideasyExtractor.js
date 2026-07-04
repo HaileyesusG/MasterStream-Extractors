@@ -65,7 +65,7 @@
       };
       var decryptUrl = 'https://enc-dec.app/api/dec-videasy';
 
-      var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
+      var encTitle = encodeURIComponent(title || '');
 
       // Servers: mb-flix (Neon), cdn (Yoru, movies+4K), downloader2 (Cypher), 1movies (Sage)
       var servers = ['mb-flix', 'cdn', 'downloader2', '1movies'];

@@ -203,6 +203,16 @@
         }
       } catch (_) { console.warn(TAG + ' ⚠️ Could not fetch servers, using fallback'); }
 
+      // Preferred server order — put reliable servers first to avoid wasting challenge solves
+      // Solstice and Vienna are consistently returning 500 — deprioritize them
+      var PREFERRED_SERVERS = ['Lion', 'Phoenix', 'Moscow', 'Sakura', 'Flower', 'Rio', 'Luna', 'Vienna', 'Solstice'];
+      servers = servers.slice().sort(function(a, b) {
+        var ai = PREFERRED_SERVERS.indexOf(a); if (ai === -1) ai = PREFERRED_SERVERS.length;
+        var bi = PREFERRED_SERVERS.indexOf(b); if (bi === -1) bi = PREFERRED_SERVERS.length;
+        return ai - bi;
+      });
+      console.log(TAG + ' 📋 Server order: ' + servers.join(', '));
+
       var mediaType = isTv ? 'series' : 'movie';
       var encTitle = encodeURIComponent(title || '');
 

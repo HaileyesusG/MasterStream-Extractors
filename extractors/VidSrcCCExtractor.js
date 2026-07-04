@@ -106,13 +106,6 @@
       var maxNumber = data.maxnumber;
       var challenge = data.challenge;
       var salt = data.salt;
-
-      // Diagnostic: log challenge info
-      console.log(TAG + ' 🔍 Challenge: maxnumber=' + maxNumber + ' salt=' + salt);
-      console.log(TAG + ' 🔍 Expected: ' + challenge);
-      console.log(TAG + ' 🔍 sha256(salt+0)=' + sha256hex(salt + '0'));
-      console.log(TAG + ' 🔍 sha256(salt+1)=' + sha256hex(salt + '1'));
-
       var number = -1;
       for (var n = 0; n <= maxNumber; n++) {
         if (sha256hex(salt + n) === challenge) { number = n; break; }
@@ -213,13 +206,10 @@
       var mediaType = isTv ? 'series' : 'movie';
       var encTitle = encodeURIComponent(title || '');
 
-      // Solve the challenge ONCE and reuse across servers
-      var attest = await solveChallenge();
-
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
 
-        // Step 1: Build snowhouse URL (now includes title + year)
+        // Step 1: Build snowhouse URL
         var snowhouseUrl = SNOWHOUSE + '/?title=' + encTitle +
           '&type=' + mediaType +
           '&year=' + (year || '') +
@@ -227,6 +217,10 @@
           '&tmdb=' + tmdbId +
           '&server=' + server;
         if (isTv) snowhouseUrl += '&season=' + season + '&episode=' + episode;
+
+        // Step 1b: Solve a FRESH challenge per server (challenge is single-use)
+        var attest = await solveChallenge();
+        if (!attest) { console.warn(TAG + ' ⚠️ [' + server + '] Challenge failed — skipping'); continue; }
 
         console.log(TAG + ' 🚀 Trying server: ' + server);
 

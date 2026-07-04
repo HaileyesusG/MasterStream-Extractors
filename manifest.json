@@ -22,11 +22,13 @@
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
             "hash": "A48576163368EE8FFB6CC42B57801FB3",
+            "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "Vidlink": {
             "file": "extractors/VidlinkExtractor.js",
             "hash": "53A4A4CA71C84FEE74915DED01A33227",
+            "nativeMode": false,
             "mediaTypes": ["movie"]
         },
         "VixSrc": {

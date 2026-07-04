@@ -191,7 +191,19 @@
     try {
       if (isTv && !SUPPORTS_TV)    { console.log('[VidSrcCC] Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log('[VidSrcCC] Skip Movie'); return null; }
-      var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna'];
+      // Step 0: Fetch server list dynamically (so we always use current servers)
+      var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna']; // fallback
+      try {
+        var srvRaw = await fetchGet(SNOWHOUSE + '/servers', BASE_HEADERS);
+        if (srvRaw) {
+          var srvJson = JSON.parse(srvRaw);
+          if (srvJson.servers && srvJson.servers.length > 0) {
+            servers = srvJson.servers.map(function(s) { return s.name; });
+            console.log(TAG + ' 📡 Got ' + servers.length + ' servers from API: ' + servers.join(', '));
+          }
+        }
+      } catch (_) { console.warn(TAG + ' ⚠️ Could not fetch servers, using fallback'); }
+
       var mediaType = isTv ? 'series' : 'movie';
       var encTitle = encodeURIComponent(title || '');
 

@@ -1,5 +1,5 @@
 {
-    "version": 72,
+    "version": 73,
     "providerPriority": [
         "Vidlink",
         "VidFast",
@@ -37,7 +37,7 @@
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "307D9C2714B068ACFA38B6F828A70C5B",
+            "hash": "6192FDAE918054B62179AE50BF2D5FA8",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },

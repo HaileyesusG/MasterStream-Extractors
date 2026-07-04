@@ -1,14 +1,9 @@
 {
-  "version": 53,
+  "version": 58,
   "providerPriority": [
-    "Vidlink",
-    "VidSrcCC",
     "VixSrc",
-    "Videasy",
-    "VidFast",
-    "OzTv",
-    "VidSrc",
-    "LordFlix"
+    "Vidlink",
+    "Videasy"
   ],
   "Videasy": {
     "domain": "https://api.videasy.to",

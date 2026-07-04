@@ -106,13 +106,19 @@
       var maxNumber = data.maxnumber;
       var challenge = data.challenge;
       var salt = data.salt;
-      var number = -1;
 
+      // Diagnostic: log challenge info
+      console.log(TAG + ' 🔍 Challenge: maxnumber=' + maxNumber + ' salt=' + salt);
+      console.log(TAG + ' 🔍 Expected: ' + challenge);
+      console.log(TAG + ' 🔍 sha256(salt+0)=' + sha256hex(salt + '0'));
+      console.log(TAG + ' 🔍 sha256(salt+1)=' + sha256hex(salt + '1'));
+
+      var number = -1;
       for (var n = 0; n <= maxNumber; n++) {
         if (sha256hex(salt + n) === challenge) { number = n; break; }
       }
 
-      if (number === -1) { console.warn(TAG + ' ⚠️ Could not solve challenge'); return null; }
+      if (number === -1) { console.warn(TAG + ' ⚠️ Could not solve challenge (checked 0..' + maxNumber + ')'); return null; }
 
       var payload = {
         algorithm: data.algorithm,

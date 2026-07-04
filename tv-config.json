@@ -1,8 +1,8 @@
 {
   "version": 58,
   "providerPriority": [
-    "VixSrc",
     "Vidlink",
+    "VixSrc",
     "Videasy"
   ],
   "Videasy": {

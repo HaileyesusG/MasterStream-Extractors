@@ -229,6 +229,7 @@
         if (isTv) snowhouseUrl += '&season=' + season + '&episode=' + episode;
 
         // Step 1b: Solve a FRESH challenge per server (challenge is single-use)
+        console.log(TAG + ' 🔗 [' + server + '] URL: ' + snowhouseUrl);
         var attest = await solveChallenge();
         if (!attest) { console.warn(TAG + ' ⚠️ [' + server + '] Challenge failed — skipping'); continue; }
 

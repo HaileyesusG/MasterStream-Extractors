@@ -37,7 +37,7 @@
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "6192FDAE918054B62179AE50BF2D5FA8",
+            "hash": "703DE019E46981869CEA052A2A3E871B",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -58,3 +58,4 @@
         }
     }
 }
+

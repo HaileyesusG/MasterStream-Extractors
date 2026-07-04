@@ -2,18 +2,26 @@
  * VideasyExtractor — self-contained CommonJS JS for remote hot-update.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VideasyExtractor.js
  *
- * ⚠️ API domain changed: api.videasy.to → api.wingsdatabase.com
+ * Reference: https://github.com/smy778/EncDecEndpoints/blob/main/samples/videasy.py
  *
- * Servers (from enc-dec.app reference):
- *   Neon    = mb-flix      (Original audio)
- *   Yoru    = cdn          (Movies only, may have 4K)
- *   Cypher  = downloader2  (Original audio)
- *   Sage    = 1movies      (Original audio)
+ * Servers (api.wingsdatabase.com):
+ *   jett       = Original audio
+ *   cdn (Yoru) = Original audio — Movies only, may have 4K
+ *   tejo       = Original audio
+ *   neon2      = Original audio
+ *   ym (Sage)  = Original audio
+ *   downloader2 (Cypher) = Original audio
+ *   m4uhd (Breach) = Original audio
+ *   hdmovie (Vyse) = English only
  */
 (function () {
   var TAG = '[VideasyExtractor]';
   var DOMAIN = 'https://api.wingsdatabase.com';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+
+  // ── Media type support — change here to enable/disable for movies or TV ──
+  var SUPPORTS_MOVIE = true;
+  var SUPPORTS_TV    = true;
 
   async function fetchGet(url, headers) {
     try {
@@ -50,6 +58,9 @@
 
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
+      if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' ⏭️ Skipping — TV not supported'); return null; }
+      if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' ⏭️ Skipping — Movies not supported'); return null; }
+
       var headers = {
         'User-Agent': USER_AGENT,
         Referer: 'https://player.videasy.to/',
@@ -60,31 +71,47 @@
       var decryptHeaders = {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/plain, */*',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36',
-        Referer: 'https://vidsrc-embed.ru/',
+        'User-Agent': USER_AGENT,
+        Referer: 'https://player.videasy.to/',
       };
       var decryptUrl = 'https://enc-dec.app/api/dec-videasy';
 
-      var encTitle = encodeURIComponent(title || '');
+      // Step 1: Fetch seed (required for enc=2 API)
+      console.log(TAG + ' 🌱 Fetching seed for tmdbId=' + tmdbId);
+      var seedRaw = await fetchGet(DOMAIN + '/seed?mediaId=' + tmdbId, headers);
+      if (!seedRaw) { console.warn(TAG + ' ❌ Failed to get seed'); return null; }
+      var seedJson;
+      try { seedJson = JSON.parse(seedRaw); } catch (_) { console.warn(TAG + ' ❌ Invalid seed JSON'); return null; }
+      var seed = seedJson.seed;
+      if (!seed) { console.warn(TAG + ' ❌ Seed missing in response'); return null; }
+      console.log(TAG + ' ✅ Got seed: ' + seed);
 
-      // Servers: mb-flix (Neon), cdn (Yoru, movies+4K), downloader2 (Cypher), 1movies (Sage)
-      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies'];
+      // Step 2: Double-encode title (intentional — API expects this format)
+      var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
+
+      // Step 3: Try each server in order
+      // cdn (Yoru) = movies only, may have 4K
+      var servers = ['jett', 'cdn', 'tejo', 'neon2', 'ym', 'downloader2', 'm4uhd', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
 
         // cdn (Yoru) is movies only
         if (server === 'cdn' && isTv) {
-          console.log(TAG + ' [' + server + '] Skipping — movies only');
+          console.log(TAG + ' [' + server + '] Skipping — movies only server');
           continue;
         }
 
         var url =
-          DOMAIN + '/' + server + '/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
-          '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
-          '&title=' + encTitle;
+          DOMAIN + '/' + server + '/sources-with-title' +
+          '?title=' + encTitle +
+          '&mediaType=' + (isTv ? 'tv' : 'movie') +
+          '&year=' + (year || '') +
+          '&tmdbId=' + tmdbId +
+          '&imdbId=' + (imdbId || '') +
+          '&enc=2' +
+          '&seed=' + seed;
 
-        if (year) url += '&year=' + year;
         if (isTv) url += '&episodeId=' + episode + '&seasonId=' + season;
 
         console.log(TAG + ' [' + server + '] Fetching sources...');
@@ -96,10 +123,10 @@
         }
         console.log(TAG + ' [' + server + '] Got encrypted data (len=' + textDetail.length + ')');
 
-        // Decrypt
+        // Step 4: Decrypt — send text + id + seed
         var decryptResponse = await fetchPost(
           decryptUrl,
-          JSON.stringify({ text: textDetail, id: tmdbId }),
+          JSON.stringify({ text: textDetail, id: tmdbId, seed: seed }),
           decryptHeaders
         );
         if (!decryptResponse) {
@@ -167,7 +194,7 @@
         };
       }
 
-      console.warn(TAG + ' All Videasy servers exhausted');
+      console.warn(TAG + ' ⚠️ All Videasy servers exhausted');
       return null;
     } catch (e) {
       console.error(TAG + ' Error during extraction', e);

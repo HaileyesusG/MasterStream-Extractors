@@ -21,7 +21,7 @@
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
-            "hash": "319AEF3AC42C6F9D7CA6999D71F02C79",
+            "hash": "A48576163368EE8FFB6CC42B57801FB3",
             "mediaTypes": ["movie", "tv"]
         },
         "Vidlink": {

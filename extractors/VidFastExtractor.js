@@ -95,6 +95,17 @@
       var serverNames = servers.map(function(s) { return s.name; }).join(', ');
       console.log(TAG + ' 📡 Got ' + servers.length + ' servers: ' + serverNames);
 
+      // Preferred server order — edit here to change priority (GitHub hot-update)
+      var PREFERRED_SERVERS = ['vEdge', 'Cobra', 'Bravo'];
+      servers = servers.slice().sort(function(a, b) {
+        var ai = PREFERRED_SERVERS.indexOf(a.name);
+        var bi = PREFERRED_SERVERS.indexOf(b.name);
+        if (ai === -1) ai = PREFERRED_SERVERS.length;
+        if (bi === -1) bi = PREFERRED_SERVERS.length;
+        return ai - bi;
+      });
+      console.log(TAG + ' 📋 Server order after priority: ' + servers.map(function(s) { return s.name; }).join(', '));
+
       // Step 4: Try each server — fetch stream and decrypt
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

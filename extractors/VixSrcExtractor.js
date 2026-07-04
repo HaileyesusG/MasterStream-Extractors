@@ -118,8 +118,19 @@
         console.warn(TAG + ' ❌ No servers returned after decryption');
         return null;
       }
-      
+
       console.log(TAG + ' 📡 Got ' + serversList.length + ' servers: ' + serversList.map(function(s) { return s.name; }).join(', '));
+
+      // Preferred server order — edit here to change priority (GitHub hot-update)
+      var PREFERRED_SERVERS = ['Prime', 'Orbit', 'Horizon'];
+      serversList = serversList.slice().sort(function(a, b) {
+        var ai = PREFERRED_SERVERS.indexOf(a.name);
+        var bi = PREFERRED_SERVERS.indexOf(b.name);
+        if (ai === -1) ai = PREFERRED_SERVERS.length;
+        if (bi === -1) bi = PREFERRED_SERVERS.length;
+        return ai - bi;
+      });
+      console.log(TAG + ' 📋 Server order after priority: ' + serversList.map(function(s) { return s.name; }).join(', '));
 
       // Loop through servers (stop at first successful one)
       for (var i = 0; i < serversList.length; i++) {

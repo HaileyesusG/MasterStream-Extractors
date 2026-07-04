@@ -1,5 +1,5 @@
 {
-    "version": 69,
+    "version": 70,
     "providerPriority": [
         "Vidlink",
         "VixSrc",
@@ -15,7 +15,7 @@
     "providers": {
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "ADE7B71F45509D13A4B02D8F208EBE6D",
+            "hash": "4CB6ED493F2D9571D14596EF09F45734",
             "nativeMode": false
         },
         "Videasy": {
@@ -28,7 +28,7 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "BBD1BD9004CDD6D7E54B06720E51F49F",
+            "hash": "ED5103375AE5890D4372C928DD7D71A1",
             "nativeMode": false
         },
         "VidSrcCC": {

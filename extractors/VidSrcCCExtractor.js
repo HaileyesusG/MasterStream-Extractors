@@ -3,18 +3,14 @@
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VidSrcCCExtractor.js
  *
  * ⚠️ VidSrcCC is dead. This slot is now powered by LordFlix (lordflix.org).
- * It returns results under provider name "VidSrcCC" so the app doesn't need updating.
+ * Returns results under provider name "VidSrcCC" so no app update needed.
  *
- * Flow:
- *  1. Build snowhouse.lordflix.club URL for movie/TV
- *  2. GET enc-dec.app/api/enc-lordflix?url=... → { text, sign }
- *  3. POST enc-dec.app/api/dec-lordflix with { text, sign } → sources + subtitles
- *
- * Servers (from https://snowhouse.lordflix.club/servers):
- *   Solstice, Vienna, Lion, Phoenix, Luna  (English)
- *   Rio (Portuguese), Moscow (Russian) — skipped
- *
- * To update server order: edit the `servers` array below and push to GitHub.
+ * Updated flow (from smy778/EncDecEndpoints/samples/lordflix.py):
+ *  1. Build snowhouse URL (with title + year + imdb + tmdb + server)
+ *  2. GET enc-dec.app/api/enc-lordflix?url=... → { url, sign }
+ *  3. Solve SHA-256 proof-of-work challenge → base64 x-attest header
+ *  4. GET enc_url with x-attest header → encrypted text
+ *  5. POST enc-dec.app/api/dec-lordflix with { text } → sources + subtitles
  */
 (function () {
   var TAG = '[VidSrcCCExtractor]';
@@ -22,42 +18,121 @@
   var ENC_DEC = 'https://enc-dec.app/api';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
-  var HEADERS = {
+  var BASE_HEADERS = {
     'Accept': '*/*',
     'Origin': 'https://lordflix.org',
     'Referer': 'https://lordflix.org/',
     'User-Agent': USER_AGENT,
   };
 
+  // ── Pure-JS SHA-256 (no SubtleCrypto needed) ─────────────────────────────
+  function sha256hex(str) {
+    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    var K = [
+      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+    ];
+    // UTF-8 encode
+    var b = [];
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charCodeAt(i);
+      if (c < 128) { b.push(c); }
+      else if (c < 2048) { b.push(192|(c>>6)); b.push(128|(c&63)); }
+      else { b.push(224|(c>>12)); b.push(128|((c>>6)&63)); b.push(128|(c&63)); }
+    }
+    var len = b.length;
+    b.push(0x80);
+    while ((b.length % 64) !== 56) b.push(0);
+    var bits = len * 8;
+    b.push(0,0,0,0);
+    for (var s = 24; s >= 0; s -= 8) b.push((bits >> s) & 0xff);
+    // Process blocks
+    for (var chunk = 0; chunk < b.length; chunk += 64) {
+      var w = [];
+      for (var j = 0; j < 16; j++)
+        w[j] = (b[chunk+j*4]<<24)|(b[chunk+j*4+1]<<16)|(b[chunk+j*4+2]<<8)|b[chunk+j*4+3];
+      for (var j = 16; j < 64; j++) {
+        var s0 = rr(7,w[j-15])^rr(18,w[j-15])^(w[j-15]>>>3);
+        var s1 = rr(17,w[j-2])^rr(19,w[j-2])^(w[j-2]>>>10);
+        w[j] = (w[j-16]+s0+w[j-7]+s1)|0;
+      }
+      var a=H[0],b2=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+      for (var j = 0; j < 64; j++) {
+        var S1=rr(6,e)^rr(11,e)^rr(25,e), ch=(e&f)^(~e&g);
+        var t1=(h+S1+ch+K[j]+w[j])|0;
+        var S0=rr(2,a)^rr(13,a)^rr(22,a), maj=(a&b2)^(a&c)^(b2&c);
+        var t2=(S0+maj)|0;
+        h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b2;b2=a;a=(t1+t2)|0;
+      }
+      H[0]=(H[0]+a)|0;H[1]=(H[1]+b2)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;
+      H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+    }
+    return H.map(function(n){return('0000000'+n.toString(16)).slice(-8);}).join('');
+  }
+
+  // ── Solve SHA-256 proof-of-work challenge ────────────────────────────────
+  // Returns base64-encoded JSON payload for the x-attest header
+  async function solveChallenge() {
+    try {
+      var resp = await fetch(SNOWHOUSE + '/challenge', { headers: BASE_HEADERS });
+      if (!resp.ok) { console.warn(TAG + ' ⚠️ Challenge fetch failed: ' + resp.status); return null; }
+      var data = JSON.parse(await resp.text());
+
+      var maxNumber = data.maxnumber;
+      var challenge = data.challenge;
+      var salt = data.salt;
+      var number = -1;
+
+      for (var n = 0; n <= maxNumber; n++) {
+        if (sha256hex(salt + n) === challenge) { number = n; break; }
+      }
+
+      if (number === -1) { console.warn(TAG + ' ⚠️ Could not solve challenge'); return null; }
+
+      var payload = {
+        algorithm: data.algorithm,
+        challenge: data.challenge,
+        number: number,
+        salt: data.salt,
+        signature: data.signature,
+      };
+
+      // base64-encode the JSON payload
+      var json = JSON.stringify(payload);
+      var b64 = btoa(unescape(encodeURIComponent(json)));
+      console.log(TAG + ' 🔐 Challenge solved: number=' + number);
+      return b64;
+    } catch (e) {
+      console.warn(TAG + ' ⚠️ Challenge error: ' + e.message);
+      return null;
+    }
+  }
+
   async function fetchGet(url, headers) {
     try {
-      var response = await fetch(url, { headers: headers || HEADERS, redirect: 'follow' });
-      if (!response.ok) {
-        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for ' + url);
-        return null;
-      }
+      var response = await fetch(url, { headers: headers || BASE_HEADERS, redirect: 'follow' });
+      if (!response.ok) { console.warn(TAG + ' ❌ HTTP ' + response.status + ' for ' + url); return null; }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' \u274c Network error: ' + e.message);
+      console.warn(TAG + ' ❌ Network error: ' + e.message);
       return null;
     }
   }
 
   async function fetchPost(url, body, headers) {
     try {
-      var response = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: body,
-        redirect: 'follow',
-      });
-      if (!response.ok) {
-        console.warn(TAG + ' \u274c HTTP ' + response.status + ' for POST ' + url);
-        return null;
-      }
+      var response = await fetch(url, { method: 'POST', headers: headers, body: body, redirect: 'follow' });
+      if (!response.ok) { console.warn(TAG + ' ❌ HTTP ' + response.status + ' for POST ' + url); return null; }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' \u274c Network error POST: ' + e.message);
+      console.warn(TAG + ' ❌ Network error POST: ' + e.message);
       return null;
     }
   }
@@ -67,18 +142,14 @@
     try {
       var m3u8 = await fetchGet(playlistUrl, reqHeaders);
       if (!m3u8) return [{ file: playlistUrl, quality: 1080 }];
-
       var lines = m3u8.split('\n');
       var results = [];
       var baseUrl = playlistUrl.substring(0, playlistUrl.lastIndexOf('/') + 1);
-
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
         if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
-          // Extract RESOLUTION=WxH
           var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/);
           var quality = resMatch ? parseInt(resMatch[2], 10) : 1080;
-          // Next non-empty line is the URL
           var nextLine = '';
           for (var j = i + 1; j < lines.length; j++) {
             nextLine = lines[j].trim();
@@ -90,7 +161,6 @@
           }
         }
       }
-
       if (results.length === 0) return [{ file: playlistUrl, quality: 1080 }];
       results.sort(function (a, b) { return b.quality - a.quality; });
       return results;
@@ -99,73 +169,51 @@
     }
   }
 
-  async function extract(tmdbId, imdbId, isTv, season, episode) {
+  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
-      // English servers only (Solstice, Vienna, Lion are most reliable)
       var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna'];
+      var mediaType = isTv ? 'series' : 'movie';
+      var encTitle = encodeURIComponent(title || '');
+
+      // Solve the challenge ONCE and reuse across servers
+      var attest = await solveChallenge();
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
 
-        // Step 1: Build snowhouse URL
-        var snowhouseUrl;
-        if (isTv) {
-          snowhouseUrl = SNOWHOUSE + '/?type=series' +
-            '&imdb=' + (imdbId || '') +
-            '&tmdb=' + tmdbId +
-            '&server=' + server +
-            '&season=' + season +
-            '&episode=' + episode;
-        } else {
-          snowhouseUrl = SNOWHOUSE + '/?type=movie' +
-            '&imdb=' + (imdbId || '') +
-            '&tmdb=' + tmdbId +
-            '&server=' + server;
-        }
+        // Step 1: Build snowhouse URL (now includes title + year)
+        var snowhouseUrl = SNOWHOUSE + '/?title=' + encTitle +
+          '&type=' + mediaType +
+          '&year=' + (year || '') +
+          '&imdb=' + (imdbId || '') +
+          '&tmdb=' + tmdbId +
+          '&server=' + server;
+        if (isTv) snowhouseUrl += '&season=' + season + '&episode=' + episode;
 
-        console.log(TAG + ' \ud83d\ude80 Trying server: ' + server);
+        console.log(TAG + ' 🚀 Trying server: ' + server);
 
-        // Step 2: Encrypt (get text + sign from enc-dec.app)
+        // Step 2: enc-lordflix → get signed URL
         var encUrl = ENC_DEC + '/enc-lordflix?url=' + encodeURIComponent(snowhouseUrl);
-        var encRaw = await fetchGet(encUrl, {
-          'Accept': 'application/json',
-          'User-Agent': USER_AGENT,
-        });
-
-        if (!encRaw) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] enc-lordflix returned null — trying next server');
-          continue;
-        }
+        var encRaw = await fetchGet(encUrl, { 'Accept': 'application/json', 'User-Agent': USER_AGENT });
+        if (!encRaw) { console.warn(TAG + ' ⚠️ [' + server + '] enc-lordflix returned null'); continue; }
 
         var encJson;
-        try { encJson = JSON.parse(encRaw); } catch (_) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Failed to parse enc response — trying next server');
-          continue;
-        }
-
-        if (encJson.status !== 200) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] enc-lordflix status=' + encJson.status + ' — trying next server');
-          continue;
-        }
+        try { encJson = JSON.parse(encRaw); } catch (_) { continue; }
+        if (encJson.status !== 200) { console.warn(TAG + ' ⚠️ [' + server + '] enc status=' + encJson.status); continue; }
 
         var encResult = encJson.result;
-        if (!encResult || !encResult.url || !encResult.sign) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Missing url/sign in enc response — trying next server');
-          continue;
-        }
+        if (!encResult || !encResult.url) { console.warn(TAG + ' ⚠️ [' + server + '] Missing url in enc response'); continue; }
 
-        // Step 2b: Fetch the encrypted script URL to get the actual encrypted text
-        console.log(TAG + ' \ud83d\udce5 [' + server + '] Fetching encrypted script...');
-        var encText = await fetchGet(encResult.url, { 'User-Agent': USER_AGENT, 'Referer': 'https://lordflix.org/', 'Origin': 'https://lordflix.org' });
-        if (!encText || encText.trim() === '') {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Empty encrypted script — trying next server');
-          continue;
-        }
+        // Step 3: Fetch encrypted payload using x-attest header
+        console.log(TAG + ' 📥 [' + server + '] Fetching encrypted payload...');
+        var fetchHeaders = Object.assign({}, BASE_HEADERS);
+        if (attest) fetchHeaders['x-attest'] = attest;
 
-        console.log(TAG + ' \ud83d\udd11 [' + server + '] Got encrypted text (len=' + encText.length + ') + sign');
+        var encText = await fetchGet(encResult.url, fetchHeaders);
+        if (!encText || encText.trim() === '') { console.warn(TAG + ' ⚠️ [' + server + '] Empty encrypted payload'); continue; }
+        console.log(TAG + ' 🔑 [' + server + '] Got encrypted text (len=' + encText.length + ')');
 
-        // Step 3: Decrypt
-        var decBody = JSON.stringify({ text: encText, sign: encResult.sign });
+        // Step 4: Decrypt — only {text}, no sign
         var decHeaders = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -173,50 +221,28 @@
           'Origin': 'https://lordflix.org',
           'Referer': 'https://lordflix.org/',
         };
-
-        var decRaw = await fetchPost(ENC_DEC + '/dec-lordflix', decBody, decHeaders);
-        if (!decRaw) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] dec-lordflix failed — trying next server');
-          continue;
-        }
+        var decRaw = await fetchPost(ENC_DEC + '/dec-lordflix', JSON.stringify({ text: encText }), decHeaders);
+        if (!decRaw) { console.warn(TAG + ' ⚠️ [' + server + '] dec-lordflix failed'); continue; }
 
         var decJson;
-        try { decJson = JSON.parse(decRaw); } catch (_) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Failed to parse dec response — trying next server');
-          continue;
-        }
-
-        if (decJson.status !== 200) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] dec-lordflix status=' + decJson.status + ': ' + (decJson.error || '') + ' — trying next server');
-          continue;
-        }
+        try { decJson = JSON.parse(decRaw); } catch (_) { continue; }
+        if (decJson.status !== 200) { console.warn(TAG + ' ⚠️ [' + server + '] dec status=' + decJson.status); continue; }
 
         var result = decJson.result;
-        if (!result || result.error) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] Server error: ' + (result && result.error ? result.error : 'no result') + ' — trying next server');
-          continue;
-        }
+        if (!result || result.error) { console.warn(TAG + ' ⚠️ [' + server + '] ' + (result && result.error || 'no result')); continue; }
 
-        // LordFlix returns: { stream: [{ id, type, playlist?, qualities?, captions? }] }
+        // Step 5: Parse sources
         var streamArr = result.stream;
-        if (!Array.isArray(streamArr) || streamArr.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No stream array in result — trying next server');
-          continue;
-        }
+        if (!Array.isArray(streamArr) || streamArr.length === 0) { console.warn(TAG + ' ⚠️ [' + server + '] No stream array'); continue; }
 
         var directQuality = [];
         var subtitlesList = [];
 
         for (var j = 0; j < streamArr.length; j++) {
           var streamItem = streamArr[j];
-
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            // HLS adaptive stream — master playlist URL returned as-is.
-            // ExoPlayer handles quality switching via adaptive bitrate.
             directQuality.push({ file: streamItem.playlist, quality: 1080 });
-
           } else if (streamItem.type === 'file' && streamItem.qualities) {
-            // File stream — multiple qualities as object: { "480": {url}, "1080": {url} }
             var qualKeys = Object.keys(streamItem.qualities);
             for (var q = 0; q < qualKeys.length; q++) {
               var qKey = qualKeys[q];
@@ -226,8 +252,6 @@
               if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
             }
           }
-
-          // Parse captions from each stream item
           var caps = streamItem.captions || streamItem.subtitles || [];
           if (Array.isArray(caps)) {
             for (var k = 0; k < caps.length; k++) {
@@ -239,14 +263,10 @@
           }
         }
 
-        if (directQuality.length === 0) {
-          console.warn(TAG + ' \u26a0\ufe0f [' + server + '] No valid quality URLs — trying next server');
-          continue;
-        }
-
+        if (directQuality.length === 0) { console.warn(TAG + ' ⚠️ [' + server + '] No quality URLs'); continue; }
         directQuality.sort(function (a, b) { return b.quality - a.quality; });
 
-        console.log(TAG + ' \u2705 [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        console.log(TAG + ' ✅ [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
           url: directQuality[0].file,
@@ -262,10 +282,10 @@
         };
       }
 
-      console.warn(TAG + ' \u274c All LordFlix servers exhausted');
+      console.warn(TAG + ' ❌ All LordFlix servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' \ud83d\udca5 Error during extraction', e);
+      console.error(TAG + ' 💥 Error during extraction', e);
       return null;
     }
   }

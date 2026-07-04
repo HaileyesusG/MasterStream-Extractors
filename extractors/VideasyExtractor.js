@@ -2,12 +2,17 @@
  * VideasyExtractor — self-contained CommonJS JS for remote hot-update.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VideasyExtractor.js
  *
- * To update: edit this file, run Update-Manifest.ps1, commit and push.
- * The app will pick it up within 1 hour (or on next cold start).
+ * ⚠️ API domain changed: api.videasy.to → api.wingsdatabase.com
+ *
+ * Servers (from enc-dec.app reference):
+ *   Neon    = mb-flix      (Original audio)
+ *   Yoru    = cdn          (Movies only, may have 4K)
+ *   Cypher  = downloader2  (Original audio)
+ *   Sage    = 1movies      (Original audio)
  */
 (function () {
   var TAG = '[VideasyExtractor]';
-  var DOMAIN = 'https://api.videasy.to';
+  var DOMAIN = 'https://api.wingsdatabase.com';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   async function fetchGet(url, headers) {
@@ -60,13 +65,20 @@
       };
       var decryptUrl = 'https://enc-dec.app/api/dec-videasy';
 
-      var encTitle = encodeURIComponent(encodeURIComponent(title));
+      var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
 
-      // Try each server — only move on if decrypt returns empty/no sources
-      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies', 'm4uhd', 'hdmovie'];
+      // Servers: mb-flix (Neon), cdn (Yoru, movies+4K), downloader2 (Cypher), 1movies (Sage)
+      var servers = ['mb-flix', 'cdn', 'downloader2', '1movies'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
+
+        // cdn (Yoru) is movies only
+        if (server === 'cdn' && isTv) {
+          console.log(TAG + ' [' + server + '] Skipping — movies only');
+          continue;
+        }
+
         var url =
           DOMAIN + '/' + server + '/sources-with-title?mediaType=' + (isTv ? 'tv' : 'movie') +
           '&tmdbId=' + tmdbId + '&imdbId=' + (imdbId || '') +
@@ -79,7 +91,7 @@
         var textDetail = await fetchGet(url, headers);
 
         if (!textDetail || textDetail.trim() === '') {
-          console.warn(TAG + ' [' + server + '] Empty encrypted response — trying next server');
+          console.warn(TAG + ' [' + server + '] Empty response — trying next server');
           continue;
         }
         console.log(TAG + ' [' + server + '] Got encrypted data (len=' + textDetail.length + ')');
@@ -91,7 +103,7 @@
           decryptHeaders
         );
         if (!decryptResponse) {
-          console.warn(TAG + ' [' + server + '] Decrypt request failed — trying next server');
+          console.warn(TAG + ' [' + server + '] Decrypt failed — trying next server');
           continue;
         }
 
@@ -105,11 +117,10 @@
         var sources = result && result.sources;
 
         if (!Array.isArray(sources) || sources.length === 0) {
-          console.warn(TAG + ' [' + server + '] No sources in decrypt result — trying next server');
+          console.warn(TAG + ' [' + server + '] No sources — trying next server');
           continue;
         }
 
-        // This server returned valid sources — parse and return
         var directQuality = [];
         for (var j = 0; j < sources.length; j++) {
           var source = sources[j];
@@ -140,7 +151,7 @@
           return { url: q.file, quality: q.quality + 'p' };
         });
 
-        console.log(TAG + ' [' + server + '] Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        console.log(TAG + ' [' + server + '] ✅ Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
           url: parsedQualities[0].url,

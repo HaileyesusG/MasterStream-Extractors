@@ -186,7 +186,8 @@
     }
   }
 
-  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
+  // Mobile app calls: extract(tmdbId, imdbId, isTv, season, episode)
+  async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
       if (isTv && !SUPPORTS_TV)    { console.log('[VidSrcCC] Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log('[VidSrcCC] Skip Movie'); return null; }
@@ -214,22 +215,18 @@
       console.log(TAG + ' 📋 Server order: ' + servers.join(', '));
 
       var mediaType = isTv ? 'series' : 'movie';
-      var encTitle = encodeURIComponent(title || '');
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
 
-        // Step 1: Build snowhouse URL
-        var snowhouseUrl = SNOWHOUSE + '/?title=' + encTitle +
-          '&type=' + mediaType +
-          '&year=' + (year || '') +
+        // Step 1: Build snowhouse URL — title/year omitted, server uses tmdbId as primary key
+        var snowhouseUrl = SNOWHOUSE + '/?type=' + mediaType +
           '&imdb=' + (imdbId || '') +
           '&tmdb=' + tmdbId +
           '&server=' + server;
         if (isTv) snowhouseUrl += '&season=' + season + '&episode=' + episode;
 
         // Step 1b: Solve a FRESH challenge per server (challenge is single-use)
-        console.log(TAG + ' 🔗 [' + server + '] URL: ' + snowhouseUrl);
         var attest = await solveChallenge();
         if (!attest) { console.warn(TAG + ' ⚠️ [' + server + '] Challenge failed — skipping'); continue; }
 

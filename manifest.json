@@ -1,5 +1,5 @@
 {
-    "version": 77,
+    "version": 78,
     "providerPriority": [
         "Videasy",
         "Vidlink",
@@ -37,7 +37,7 @@
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "597E91EC8343811C792862385227442F",
+            "hash": "5D6F394C0C30A3F97496CA1A3D5E4B60",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -58,6 +58,7 @@
         }
     }
 }
+
 
 
 

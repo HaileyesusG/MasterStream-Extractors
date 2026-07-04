@@ -1,5 +1,5 @@
 {
-    "version": 70,
+    "version": 71,
     "providerPriority": [
         "Vidlink",
         "VixSrc",
@@ -15,38 +15,46 @@
     "providers": {
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "4CB6ED493F2D9571D14596EF09F45734",
-            "nativeMode": false
+            "hash": "D2ADED366E48E94473498ED0373353EC",
+            "nativeMode": false,
+            "mediaTypes": ["movie", "tv"]
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
-            "hash": "319AEF3AC42C6F9D7CA6999D71F02C79"
+            "hash": "319AEF3AC42C6F9D7CA6999D71F02C79",
+            "mediaTypes": ["movie", "tv"]
         },
         "Vidlink": {
             "file": "extractors/VidlinkExtractor.js",
-            "hash": "C09FC2D23685500AAC6D440065D88AAF"
+            "hash": "53A4A4CA71C84FEE74915DED01A33227",
+            "mediaTypes": ["movie"]
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "ED5103375AE5890D4372C928DD7D71A1",
-            "nativeMode": false
+            "hash": "E8A488497298D40DAA058CAD22A4D9F1",
+            "nativeMode": false,
+            "mediaTypes": ["movie", "tv"]
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "D9EC8FD77795346FA1662BD7896C92C6",
-            "nativeMode": false
+            "hash": "307D9C2714B068ACFA38B6F828A70C5B",
+            "nativeMode": false,
+            "mediaTypes": ["movie", "tv"]
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": ""
+            "hash": "",
+            "mediaTypes": ["movie", "tv"]
         },
         "VidSrc": {
             "file": "extractors/VidSrcExtractor.js",
-            "hash": ""
+            "hash": "",
+            "mediaTypes": ["movie", "tv"]
         },
         "OzTv": {
             "file": "extractors/OzTvExtractor.js",
-            "hash": ""
+            "hash": "",
+            "mediaTypes": ["movie", "tv"]
         }
     }
 }

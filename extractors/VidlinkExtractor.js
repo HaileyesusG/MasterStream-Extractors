@@ -12,8 +12,14 @@
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+  // ── Media type support — change here to enable/disable for movies or TV ──
+  var SUPPORTS_MOVIE = true;
+  var SUPPORTS_TV    = false; // Vidlink is unreliable for TV series
+
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
+      if (isTv && !SUPPORTS_TV)   { console.log(TAG + ' ⏭️ Skipping — TV series not supported'); return null; }
+      if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' ⏭️ Skipping — Movies not supported'); return null; }
       console.log(TAG + ' 🚀 Extracting via API for TMDB ID: ' + tmdbId);
 
       // 1. Get encrypted token for TMDB ID

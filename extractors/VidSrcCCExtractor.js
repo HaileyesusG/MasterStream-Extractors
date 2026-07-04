@@ -14,6 +14,10 @@
  */
 (function () {
   var TAG = '[VidSrcCCExtractor]';
+  // -- Media type support � change here to enable/disable for movies or TV --
+  var SUPPORTS_MOVIE = true;
+  var SUPPORTS_TV    = true;
+
   var SNOWHOUSE = 'https://snowhouse.lordflix.club';
   var ENC_DEC = 'https://enc-dec.app/api';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
@@ -185,6 +189,8 @@
 
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
+      if (isTv && !SUPPORTS_TV)    { console.log('[VidSrcCC] Skip TV'); return null; }
+      if (!isTv && !SUPPORTS_MOVIE) { console.log('[VidSrcCC] Skip Movie'); return null; }
       var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna'];
       var mediaType = isTv ? 'series' : 'movie';
       var encTitle = encodeURIComponent(title || '');

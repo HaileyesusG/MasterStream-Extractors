@@ -5,6 +5,10 @@
  */
 (function () {
   var TAG = '[VixSrcExtractor]';
+  // -- Media type support � change here to enable/disable for movies or TV --
+  var SUPPORTS_MOVIE = true;
+  var SUPPORTS_TV    = true;
+
   var DOMAIN = 'https://vidcore.net';
   var ENC_DEC = 'https://enc-dec.app/api';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
@@ -37,6 +41,8 @@
 
   async function extract(tmdbId, isTv, season, episode) {
     try {
+      if (isTv && !SUPPORTS_TV)    { console.log('[VixSrc] Skip TV'); return null; }
+      if (!isTv && !SUPPORTS_MOVIE) { console.log('[VixSrc] Skip Movie'); return null; }
       var headers = {
         'User-Agent': USER_AGENT,
         'Referer': DOMAIN + '/',

@@ -7,6 +7,10 @@
  */
 (function () {
   var TAG = '[VidFastExtractor]';
+  // -- Media type support � change here to enable/disable for movies or TV --
+  var SUPPORTS_MOVIE = true;
+  var SUPPORTS_TV    = true;
+
   var DOMAIN = 'https://vidfast.pro';
   var ENC_DEC_API = 'https://enc-dec.app/api';
   var VERSION = '1';
@@ -15,6 +19,8 @@
 
   async function extract(tmdbId, isTv, season, episode) {
     try {
+      if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' Skip TV'); return null; }
+      if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' Skip Movie'); return null; }
       // Step 1: Fetch vidfast embed page and extract the encrypted text token
       var pageUrl = isTv
         ? DOMAIN + '/tv/' + tmdbId + '/' + season + '/' + episode + '/'

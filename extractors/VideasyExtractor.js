@@ -89,9 +89,9 @@
       // Step 2: Double-encode title (intentional — API expects this format)
       var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
 
-      // Step 3: Try each server in order
-      // cdn (Yoru) = movies only, may have 4K
-      var servers = ['jett', 'cdn', 'tejo', 'neon2', 'ym', 'downloader2', 'm4uhd', 'hdmovie'];
+      // cdn (Yoru) is movies-only with built-in subtitles and possible 4K → try it FIRST for movies.
+      // TV series will skip it automatically (guard at line below) and fall through to jett.
+      var servers = ['cdn', 'jett', 'tejo', 'neon2', 'ym', 'downloader2', 'm4uhd', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

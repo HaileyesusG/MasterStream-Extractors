@@ -17,7 +17,16 @@
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
-  async function extract(tmdbId, isTv, season, episode) {
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
+    // Dual calling-convention support:
+    //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
+    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
+    var isTv, season, episode;
+    if (typeof arg1 === 'boolean') {
+      isTv = arg1; season = arg2; episode = arg3; // mobile
+    } else {
+      isTv = arg3; season = arg4; episode = arg5; // TV app
+    }
     try {
       if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' Skip Movie'); return null; }

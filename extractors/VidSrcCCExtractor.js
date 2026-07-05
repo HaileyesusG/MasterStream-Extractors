@@ -229,10 +229,20 @@
     }
   }
 
-  async function extract(tmdbId, imdbId, isTv, season, episode) {
+  async function extract(tmdbId, imdbId, arg2, arg3, arg4, arg5) {
+    // Dual calling-convention support:
+    //   Mobile app: extract(tmdbId, imdbId, isTv, season, episode)               — 5 params
+    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year)   — 7 params
+    var isTv, season, episode;
+    if (typeof arg2 === 'boolean') {
+      isTv = arg2; season = arg3; episode = arg4; // mobile
+    } else {
+      isTv = arg3; season = arg4; episode = arg5; // TV app (arg2 = title, ignored)
+    }
     try {
       if (isTv && !SUPPORTS_TV)    { console.log('[VidSrcCC] Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log('[VidSrcCC] Skip Movie'); return null; }
+
       // Step 0: Fetch server list dynamically (so we always use current servers)
       var servers = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Luna']; // fallback
       try {

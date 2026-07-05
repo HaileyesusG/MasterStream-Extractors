@@ -39,7 +39,16 @@
     }
   }
 
-  async function extract(tmdbId, isTv, season, episode) {
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
+    // Dual calling-convention support:
+    //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
+    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
+    var isTv, season, episode;
+    if (typeof arg1 === 'boolean') {
+      isTv = arg1; season = arg2; episode = arg3; // mobile
+    } else {
+      isTv = arg3; season = arg4; episode = arg5; // TV app
+    }
     try {
       if (isTv && !SUPPORTS_TV)    { console.log('[VixSrc] Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log('[VixSrc] Skip Movie'); return null; }

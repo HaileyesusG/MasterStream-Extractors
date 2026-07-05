@@ -1,5 +1,5 @@
 {
-    "version": 80,
+    "version": 81,
     "providerPriority": [
         "Videasy",
         "Vidlink",
@@ -15,7 +15,7 @@
     "providers": {
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "D2ADED366E48E94473498ED0373353EC",
+            "hash": "0C33486D5BDA12136216FA21C9D509E4",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -33,13 +33,13 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "E8A488497298D40DAA058CAD22A4D9F1",
+            "hash": "98AEA0CB0619F823E91882EFB6925C70",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "A20C6E8A66D293F475EEB5D7AAE983EE",
+            "hash": "B9CDACF94EEC8D2F0E235A8702910BF1",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -60,6 +60,7 @@
         }
     }
 }
+
 
 
 

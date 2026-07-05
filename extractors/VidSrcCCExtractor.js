@@ -186,7 +186,42 @@
     }
   }
 
-  // Mobile app calls: extract(tmdbId, imdbId, isTv, season, episode)
+  // ── HLS master playlist parser ─────────────────────────────────────────────
+  // Fetches the master m3u8 and returns [{file, quality}] for each variant.
+  // Falls back to [{file: url, quality: 1080}] on any error.
+  async function parseHlsMaster(masterUrl, fetchHeaders) {
+    try {
+      var body = await fetchGet(masterUrl, fetchHeaders);
+      if (!body || !body.includes('#EXT-X-STREAM-INF')) {
+        return [{ file: masterUrl, quality: 1080 }];
+      }
+      var variants = [];
+      var lines = body.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
+          var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/);
+          var bwMatch  = line.match(/BANDWIDTH=(\d+)/);
+          var height   = resMatch ? parseInt(resMatch[2], 10) : null;
+          var nextLine = (lines[i + 1] || '').trim();
+          if (!nextLine || nextLine.charAt(0) === '#') continue;
+          // Resolve relative URLs
+          var varUrl = nextLine;
+          if (varUrl.indexOf('http') !== 0) {
+            var base = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+            varUrl = base + varUrl;
+          }
+          var quality = height ||
+            (bwMatch ? Math.round(parseInt(bwMatch[1], 10) / 150000) * 100 : 1080);
+          variants.push({ file: varUrl, quality: quality });
+        }
+      }
+      return variants.length > 0 ? variants : [{ file: masterUrl, quality: 1080 }];
+    } catch (_) {
+      return [{ file: masterUrl, quality: 1080 }];
+    }
+  }
+
   async function extract(tmdbId, imdbId, isTv, season, episode) {
     try {
       if (isTv && !SUPPORTS_TV)    { console.log('[VidSrcCC] Skip TV'); return null; }
@@ -281,7 +316,17 @@
         for (var j = 0; j < streamArr.length; j++) {
           var streamItem = streamArr[j];
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            directQuality.push({ file: streamItem.playlist, quality: 1080 });
+            // Parse the HLS master playlist to get all quality variants
+            var hlsVariants = await parseHlsMaster(streamItem.playlist, {
+              'User-Agent': USER_AGENT,
+              'Referer': 'https://lordflix.org/',
+              'Origin': 'https://lordflix.org',
+            });
+            for (var v = 0; v < hlsVariants.length; v++) {
+              directQuality.push(hlsVariants[v]);
+            }
+            console.log(TAG + ' 📺 [' + server + '] HLS variants: ' + hlsVariants.length);
+
           } else if (streamItem.type === 'file' && streamItem.qualities) {
             var qualKeys = Object.keys(streamItem.qualities);
             for (var q = 0; q < qualKeys.length; q++) {

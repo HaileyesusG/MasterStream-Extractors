@@ -258,7 +258,7 @@
 
       // Preferred server order — put reliable servers first to avoid wasting challenge solves
       // Solstice and Vienna are consistently returning 500 — deprioritize them
-      var PREFERRED_SERVERS = ['Vienna', 'Lion', 'Solstice', 'Phoenix', 'Flower', 'Rio', 'Luna', 'Moscow', 'Sakura'];
+      var PREFERRED_SERVERS = ['Solstice', 'Vienna', 'Lion', 'Phoenix', 'Flower', 'Rio', 'Luna', 'Moscow', 'Sakura'];
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a); if (ai === -1) ai = PREFERRED_SERVERS.length;
         var bi = PREFERRED_SERVERS.indexOf(b); if (bi === -1) bi = PREFERRED_SERVERS.length;

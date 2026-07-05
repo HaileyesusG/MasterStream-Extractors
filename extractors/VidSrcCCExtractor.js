@@ -205,9 +205,16 @@
           var height   = resMatch ? parseInt(resMatch[2], 10) : null;
           var nextLine = (lines[i + 1] || '').trim();
           if (!nextLine || nextLine.charAt(0) === '#') continue;
-          // Resolve relative URLs
+          // Resolve relative or absolute-path variant URLs
           var varUrl = nextLine;
-          if (varUrl.indexOf('http') !== 0) {
+          if (varUrl.indexOf('http') === 0) {
+            // Already absolute — use as-is
+          } else if (varUrl.charAt(0) === '/') {
+            // Absolute path — use origin only (avoid double-slash)
+            var originMatch = masterUrl.match(/^(https?:\/\/[^\/]+)/);
+            varUrl = originMatch ? originMatch[1] + varUrl : masterUrl;
+          } else {
+            // Relative path
             var base = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
             varUrl = base + varUrl;
           }
@@ -316,16 +323,21 @@
         for (var j = 0; j < streamArr.length; j++) {
           var streamItem = streamArr[j];
           if (streamItem.type === 'hls' && streamItem.playlist) {
-            // Parse the HLS master playlist to get all quality variants
-            var hlsVariants = await parseHlsMaster(streamItem.playlist, {
+            var masterUrl = streamItem.playlist;
+            var hlsVariants = await parseHlsMaster(masterUrl, {
               'User-Agent': USER_AGENT,
               'Referer': 'https://lordflix.org/',
               'Origin': 'https://lordflix.org',
             });
+            var maxQ = 1080;
             for (var v = 0; v < hlsVariants.length; v++) {
-              directQuality.push(hlsVariants[v]);
+              if (hlsVariants[v].quality > maxQ || v === 0) maxQ = hlsVariants[v].quality;
             }
             console.log(TAG + ' 📺 [' + server + '] HLS variants: ' + hlsVariants.length);
+            // Primary entry = original master URL (proxy, validates fine with 200/206)
+            // hlsVariants stored for quality picker
+            directQuality.push({ file: masterUrl, quality: maxQ, hlsVariants: hlsVariants });
+
 
           } else if (streamItem.type === 'file' && streamItem.qualities) {
             var qualKeys = Object.keys(streamItem.qualities);
@@ -351,12 +363,25 @@
         if (directQuality.length === 0) { console.warn(TAG + ' ⚠️ [' + server + '] No quality URLs'); continue; }
         directQuality.sort(function (a, b) { return b.quality - a.quality; });
 
+        // Build qualities for UI picker:
+        // For HLS entries, use the parsed hlsVariants (all resolutions);
+        // for direct-file entries use the directQuality list as-is.
+        var qualitiesForPicker;
+        var primary = directQuality[0];
+        if (primary.hlsVariants && primary.hlsVariants.length > 1) {
+          qualitiesForPicker = primary.hlsVariants
+            .sort(function(a, b) { return b.quality - a.quality; })
+            .map(function(q) { return { url: q.file, quality: q.quality + 'p' }; });
+        } else {
+          qualitiesForPicker = directQuality.map(function(q) { return { url: q.file, quality: q.quality + 'p' }; });
+        }
+
         console.log(TAG + ' ✅ [' + server + '] Found ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subtitles');
 
         return {
-          url: directQuality[0].file,
-          quality: directQuality[0].quality + 'p',
-          qualities: directQuality.map(function (q) { return { url: q.file, quality: q.quality + 'p' }; }),
+          url: primary.file,
+          quality: primary.quality + 'p',
+          qualities: qualitiesForPicker,
           provider: 'VidSrcCC',
           headers: {
             'User-Agent': USER_AGENT,

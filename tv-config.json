@@ -1,9 +1,9 @@
 {
-  "version": 67,
+  "version": 68,
   "providerPriority": [
-    "Videasy",
-    "VidSrcCC",
     "Vidlink",
+    "VidSrcCC",
+    "Videasy",
     "VidFast",
     "VixSrc",
   ],

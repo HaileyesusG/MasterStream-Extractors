@@ -97,10 +97,10 @@
         var server = servers[i];
 
         // cdn (Yoru) is movies only
-        if (server === 'cdn' && isTv) {
-          console.log(TAG + ' [' + server + '] Skipping — movies only server');
-          continue;
-        }
+        // if (server === 'cdn' && isTv) {
+        //   console.log(TAG + ' [' + server + '] Skipping — movies only server');
+        //   continue;
+        // }
 
         var url =
           DOMAIN + '/' + server + '/sources-with-title' +

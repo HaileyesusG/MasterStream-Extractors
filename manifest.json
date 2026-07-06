@@ -1,5 +1,5 @@
 {
-    "version": 86,
+    "version": 87,
     "providerPriority": [
         "Videasy",
         "Vidlink",
@@ -29,7 +29,7 @@
             "file": "extractors/VidlinkExtractor.js",
             "hash": "53A4A4CA71C84FEE74915DED01A33227",
             "nativeMode": false,
-            "mediaTypes": ["movie"]
+            "mediaTypes": ["movie","tv"]
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",

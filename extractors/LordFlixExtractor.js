@@ -94,15 +94,21 @@
       var finalPlaylistUrl = DOMAIN + '/playlist/' + sourceId + '?token=' + token + '&expires=' + expires + '&h=1&lang=en';
       console.log(TAG + ' ✅ Final Playlist URL: ' + finalPlaylistUrl);
 
+      var resultHeaders = {
+        'User-Agent': USER_AGENT,
+        'Referer': DOMAIN + '/',
+        'Origin': DOMAIN,
+        'Accept': '*/*'
+      };
+      if (cookies && cookies.trim() !== '') {
+        resultHeaders['Cookie'] = cookies;
+      }
+
       return {
         url: finalPlaylistUrl,
         quality: 'Auto',
         provider: 'LordFlix',
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Referer': DOMAIN + '/',
-          'Cookie': cookies
-        },
+        headers: resultHeaders,
         subtitles: []
       };
     } catch (e) {

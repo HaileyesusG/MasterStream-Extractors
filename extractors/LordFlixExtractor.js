@@ -111,8 +111,5 @@
     }
   }
 
-  return {
-    extract: extract,
-    getName: function() { return 'LordFlix'; }
-  };
+  module.exports = { extract: extract };
 })();

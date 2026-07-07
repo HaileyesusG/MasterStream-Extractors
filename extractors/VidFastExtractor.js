@@ -11,7 +11,7 @@
   var SUPPORTS_MOVIE = true;
   var SUPPORTS_TV    = true;
 
-  var DOMAIN = 'https://vidfast.pro';
+  var DOMAIN = 'https://vidfast.vc';
   var ENC_DEC_API = 'https://enc-dec.app/api';
   var VERSION = '1';
   var USER_AGENT =

@@ -1,105 +1,116 @@
+/**
+ * LordFlixExtractor — self-contained CommonJS JS for remote hot-update.
+ * Uses the new vixsrc.to Next.js API logic (replaced old LordFlix logic).
+ */
 (function () {
-  'use strict';
+  var TAG = '[LordFlixExtractor]';
+  var DOMAIN = 'https://vixsrc.to';
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-  /**
-   * LordFlixExtractor.js
-   * Domain: https://lordflix.org / https://snowhouse.lordflix.club
-   * Flow:
-   *   1. Build Snowhouse URL with title/imdb/tmdb/server params
-   *   2. enc-lordflix → get signed URL
-   *   3. GET signed URL → encrypted payload
-   *   4. dec-lordflix → parse stream URL + subtitles
-   */
-
-  const DOMAIN     = 'https://lordflix.org';
-  const SNOWHOUSE  = 'https://snowhouse.lordflix.club';
-  const ENC_DEC    = 'https://enc-dec.app/api';
-  const UA         = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
-  const SERVERS    = ['Berlin', 'Comet', 'Rabbit', 'Phoenix', 'Oslo', 'Luna'];
-
-  async function httpGet(url, extraHeaders) {
-    const headers = Object.assign({ 'Accept': '*/*', 'Origin': DOMAIN, 'Referer': DOMAIN + '/', 'User-Agent': UA }, extraHeaders || {});
-    const res = await fetch(url, { headers });
-    if (!res.ok) return null;
-    return res.text();
+  function regexFirst(input, pattern) {
+    var match = input.match(new RegExp(pattern, 'i'));
+    return match ? match[1] : null;
   }
 
-  async function postJson(url, body) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'User-Agent': UA, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) return null;
-    return res.json();
+  async function fetchGet(url, headers) {
+    try {
+      var response = await fetch(url, { headers: headers, redirect: 'follow' });
+      return response;
+    } catch (e) {
+      console.warn(TAG + ' ❌ Network error: ' + e.message);
+      return null;
+    }
   }
 
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
-    if (!imdbId) return null;
+    try {
+      var baseHeaders = {
+        'User-Agent': USER_AGENT,
+        'Referer': DOMAIN + '/',
+        'Origin': DOMAIN
+      };
 
-    const mediaType  = isTv ? 'series' : 'movie';
-    const releaseYear = year || '';
-    const encTitle   = encodeURIComponent(title || '');
+      // 1. Build API URL
+      var apiUrl = isTv
+        ? DOMAIN + '/api/tv/' + tmdbId + '/' + season + '/' + episode
+        : DOMAIN + '/api/movie/' + tmdbId;
 
-    for (const server of SERVERS) {
-      try {
-        let url = SNOWHOUSE + '/?title=' + encTitle + '&type=' + mediaType +
-                  '&year=' + releaseYear + '&imdb=' + imdbId + '&tmdb=' + tmdbId + '&server=' + server;
-        if (isTv) url += '&season=' + season + '&episode=' + episode;
+      console.log(TAG + ' 🚀 Fetching API: ' + apiUrl);
 
-        console.log('[LordFlix] 🚀 Trying server: ' + server);
+      // 2. Fetch API detail page
+      var apiHeaders = Object.assign({}, baseHeaders, {
+        'Accept': '*/*',
+        'X-Requested-With': 'XMLHttpRequest'
+      });
+      var apiRes = await fetchGet(apiUrl, apiHeaders);
 
-        // Step 1: enc-lordflix → signed URL
-        const encRaw = await httpGet(ENC_DEC + '/enc-lordflix?url=' + encodeURIComponent(url));
-        if (!encRaw) continue;
-        const encJson = JSON.parse(encRaw);
-        if (encJson.status !== 200) { console.log('[LordFlix] ⚠️ enc-lordflix failed: ' + encJson.error); continue; }
-
-        const streamEncUrl = encJson.result.url;
-        const sign         = encJson.result.sign;
-
-        // Step 2: Fetch encrypted payload
-        const encryptedText = await httpGet(streamEncUrl);
-        if (!encryptedText || !encryptedText.trim()) continue;
-
-        // Step 3: dec-lordflix
-        const decRaw = await postJson(ENC_DEC + '/dec-lordflix', { text: encryptedText, sign });
-        if (!decRaw || decRaw.status !== 200) { console.log('[LordFlix] ⚠️ dec-lordflix failed'); continue; }
-
-        let resultObj = decRaw.result;
-        if (typeof resultObj === 'string') {
-          if (!resultObj.trim().startsWith('{')) continue;
-          resultObj = JSON.parse(resultObj);
-        }
-        if (!resultObj || resultObj.error) { console.log('[LordFlix] ⬛ ' + server + ': ' + (resultObj && resultObj.error)); continue; }
-
-        const streamUrl = resultObj.url;
-        if (!streamUrl) continue;
-
-        const subtitles = [];
-        const subList = resultObj.sub && resultObj.sub.list;
-        if (subList) {
-          for (const sub of subList) {
-            if (sub.url && sub.lang) subtitles.push({ url: sub.url, lang: sub.lang, label: sub.label || sub.lang });
-          }
-        }
-
-        console.log('[LordFlix] ✅ Stream from ' + server + ': ' + streamUrl.substring(0, 60));
-        return {
-          url:      streamUrl,
-          quality:  'Auto',
-          provider: 'LordFlix-' + server,
-          headers:  { 'User-Agent': UA, 'Referer': DOMAIN + '/', 'Origin': DOMAIN },
-          subtitles
-        };
-      } catch (e) {
-        console.log('[LordFlix] ❌ Server ' + server + ' error: ' + e.message);
+      if (!apiRes || !apiRes.ok) {
+        console.warn(TAG + ' ❌ API HTTP Error');
+        return null;
       }
-    }
 
-    console.log('[LordFlix] ❌ All servers exhausted');
-    return null;
+      var apiData = await apiRes.json();
+      if (!apiData || !apiData.src) {
+        console.warn(TAG + ' ❌ No src in API response');
+        return null;
+      }
+
+      var embedUrl = DOMAIN + apiData.src;
+      console.log(TAG + ' 🔗 Found embed URL: ' + embedUrl);
+
+      // Extract cookies if any are set by the API
+      var cookies = apiRes.headers.get('set-cookie') || '';
+
+      // 3. Fetch Embed HTML
+      var embedHeaders = Object.assign({}, baseHeaders, {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Cookie': cookies
+      });
+      var embedRes = await fetchGet(embedUrl, embedHeaders);
+
+      if (!embedRes || !embedRes.ok) {
+        console.warn(TAG + ' ❌ Embed HTTP Error');
+        return null;
+      }
+
+      var embedHtml = await embedRes.text();
+
+      // 4. Regex for token and expires
+      var token = regexFirst(embedHtml, "'token' *: *'([^']+)");
+      var expires = regexFirst(embedHtml, "'expires' *: *'([^']+)");
+      var sourceIdMatch = embedUrl.match(/\/embed\/(\d+)/);
+      var sourceId = sourceIdMatch ? sourceIdMatch[1] : null;
+
+      if (!token || !expires || !sourceId) {
+        console.warn(TAG + ' ❌ Failed to parse tokens or sourceId from embed HTML');
+        return null;
+      }
+
+      console.log(TAG + ' 🔑 Tokens found: token=' + token + ', expires=' + expires + ', sourceId=' + sourceId);
+
+      // 5. Build Final Playlist URL
+      var finalPlaylistUrl = DOMAIN + '/playlist/' + sourceId + '?token=' + token + '&expires=' + expires + '&h=1&lang=en';
+      console.log(TAG + ' ✅ Final Playlist URL: ' + finalPlaylistUrl);
+
+      return {
+        url: finalPlaylistUrl,
+        quality: 'Auto',
+        provider: 'LordFlix',
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': DOMAIN + '/',
+          'Cookie': cookies
+        },
+        subtitles: []
+      };
+    } catch (e) {
+      console.error(TAG + ' 💥 Error: ' + e.message);
+      return null;
+    }
   }
 
-  module.exports = { extract };
+  return {
+    extract: extract,
+    getName: function() { return 'LordFlix'; }
+  };
 })();

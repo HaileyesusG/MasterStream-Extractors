@@ -59,7 +59,9 @@
       console.log(TAG + ' 🔗 Found embed URL: ' + embedUrl);
 
       // Extract cookies if any are set by the API
-      var cookies = apiRes.headers.get('set-cookie') || '';
+      var setCookieHeader = apiRes.headers.get('set-cookie') || '';
+      var cookiesArray = setCookieHeader.split(/,(?=\s*[A-Za-z0-9_]+\=)/);
+      var cookies = cookiesArray.map(function(c) { return c.split(';')[0].trim(); }).join('; ');
 
       // 3. Fetch Embed HTML
       var embedHeaders = Object.assign({}, baseHeaders, {

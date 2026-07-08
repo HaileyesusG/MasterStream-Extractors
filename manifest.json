@@ -1,9 +1,9 @@
 {
-    "version": 102,
+    "version": 103,
     "providerPriority": [
-        "Vidlink",
         "Videasy",
         "VidFast",
+        "Vidlink",
         "VixSrc",
         "VidSrcCC",
         "OzTv",

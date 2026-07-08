@@ -1,5 +1,5 @@
 {
-    "version": 99,
+    "version": 100,
     "providerPriority": [
         "VidFast",
         "VidSrcCC",
@@ -45,7 +45,7 @@
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": "",
+            "hash": "VIXSRC_REWRITE_V1",
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrc": {

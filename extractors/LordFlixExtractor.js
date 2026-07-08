@@ -89,22 +89,28 @@
       console.log(TAG + ' 🔗 Raw url: ' + rawUrl);
       console.log(TAG + ' 🔗 Unescaped url: ' + playlistUrl);
 
-      // Extract params object — try to find and parse it as JSON
+      // Extract params object — extract each key-value pair individually
+      // (avoids JSON.parse issues with single-quoted strings and variable references)
       var params = {};
       var paramsBlockMatch = script.match(/\bparams\s*:\s*(\{[\s\S]*?\})/);
       if (paramsBlockMatch) {
-        try {
-          // Normalize JS object literal → valid JSON
-          var block = paramsBlockMatch[1]
-            .replace(/\/\/[^\n]*/g, '')            // remove line comments
-            .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":')  // unquoted keys
-            .replace(/:\s*'((?:[^'\\]|\\.)*)'/g, function(_, v) { return ':"' + v.replace(/"/g, '\\"') + '"'; })  // single → double quotes
-            .replace(/,(\s*[}\]])/g, '$1');         // trailing commas
-
-          params = JSON.parse(block);
-          console.log(TAG + ' ✅ Parsed params: ' + JSON.stringify(params));
-        } catch (e) {
-          console.warn(TAG + ' ⚠️ params JSON parse failed (' + e.message + '), will use embed URL params as fallback');
+        var paramsText = paramsBlockMatch[1];
+        var kvRegex = /\b(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?|true|false|null))/g;
+        var kv;
+        while ((kv = kvRegex.exec(paramsText)) !== null) {
+          var key = kv[1];
+          var val = kv[2] !== undefined ? kv[2]   // single-quoted string
+                  : kv[3] !== undefined ? kv[3]   // double-quoted string
+                  : kv[4];                         // number / bool / null
+          if (key && val !== undefined && val !== null && val !== 'null' && val !== 'false') {
+            params[key] = val;
+          }
+        }
+        var paramKeys = Object.keys(params);
+        if (paramKeys.length > 0) {
+          console.log(TAG + ' ✅ Parsed params (' + paramKeys.length + ' keys): ' + paramKeys.join(', '));
+        } else {
+          console.warn(TAG + ' ⚠️ params block found but no key-value pairs extracted — will use embed URL params');
         }
       }
 
@@ -136,17 +142,17 @@
         }
       }
 
-      // If params object was empty/failed, fall back to embed URL query params
-      // (token, expires, t are needed to authenticate the playlist request)
-      var hasToken = u.searchParams.has('token') || u.searchParams.has('t') || u.searchParams.has('expires');
+      // If critical auth params are missing, inject ALL params from embed URL as fallback
+      // (token, expires, t, ub, b, and any other auth params the server requires)
+      var hasToken = u.searchParams.has('token') || u.searchParams.has('expires');
       if (!hasToken && embedUrl) {
         try {
           var embedU = new URL(embedUrl);
-          ['token', 't', 'expires'].forEach(function(k) {
-            var v = embedU.searchParams.get(k);
-            if (v) u.searchParams.set(k, v);
+          embedU.searchParams.forEach(function(v, k) {
+            // Don't overwrite params already on the playlist URL
+            if (!u.searchParams.has(k)) u.searchParams.set(k, v);
           });
-          console.log(TAG + ' 🔑 Injected token/expires from embed URL');
+          console.log(TAG + ' 🔑 Injected all params from embed URL');
         } catch (e) {
           console.warn(TAG + ' ⚠️ Could not parse embed URL for fallback params');
         }

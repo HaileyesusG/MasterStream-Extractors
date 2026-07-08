@@ -17,7 +17,7 @@
             "file": "extractors/VidFastExtractor.js",
             "hash": "0C33486D5BDA12136216FA21C9D509E4",
             "nativeMode": false,
-            "mediaTypes": ["movie", "tv"]
+            "mediaTypes": ["tv"]
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",

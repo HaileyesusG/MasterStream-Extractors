@@ -18,7 +18,7 @@
   var SUPPORTS_MOVIE = true;
   var SUPPORTS_TV    = true;
 
-  var SNOWHOUSE = 'https://snowhouse.lordflix.club';
+  var SNOWHOUSE = 'https://hongkong.lordflix.club';
   var ENC_DEC = 'https://enc-dec.app/api';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 

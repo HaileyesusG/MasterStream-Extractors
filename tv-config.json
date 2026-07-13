@@ -1,11 +1,11 @@
 {
-  "version": 85,
+  "version": 86,
   "providerPriority": [
-   "VidSrcCC",
    "Videasy",
    "Vidlink",
    "VixSrc",
    "VidFast",
+   "VidSrcCC",
   ],
   "Videasy": {
     "domain": "https://api.videasy.to",

@@ -24,8 +24,8 @@
 
   var BASE_HEADERS = {
     'Accept': '*/*',
-    'Origin': 'https://lordflix.su',
-    'Referer': 'https://lordflix.su',
+    'Origin': 'https://lordflix.org',
+    'Referer': 'https://lordflix.org',
     'User-Agent': USER_AGENT,
   };
 

@@ -2,172 +2,113 @@
   'use strict';
 
   /**
-   * LordFlixExtractor.js — vixsrc.to API (hacker-verified, no encryption)
+   * LordFlixExtractor.js — powered by Peachify (peachify.top)
    *
-   * Flow:
-   *   1. GET /api/movie/{tmdbId}  or  /api/tv/{tmdbId}?s=&e=
-   *      → { src: "/embed/{id}?token=...&expires=...&t=..." }
-   *   2. GET /{src}  with Referer: vixsrc.to/
-   *      → HTML with inline <script> blocks
-   *   3. scripts[4] sets: window.masterPlaylist = { url: "...", params: {...} }
-   *   4. Unescape URL + merge params + append h=1&lang=en → final HLS URL
+   * Replaces broken LordFlix/VixSrc approach with the simpler Peachify flow
+   * (no PoW challenge required).
+   *
+   * Flow (from smy778/EncDecEndpoints/samples/peachify.py):
+   *   1. Pick server from hardcoded list: { label, path, api }
+   *   2. GET {server.api}/{server.path}/movie/{tmdbId}
+   *      or  {server.api}/{server.path}/tv/{tmdbId}/{season}/{episode}
+   *      → JSON response with { data: "<encrypted_text>" }
+   *   3. POST enc-dec.app/api/dec-peachify with { text: enc_data }
+   *      → { status: 200, result: { stream: [...], ... } }
+   *   4. Parse streams + subtitles and return best quality
+   *
+   * Remotely updatable from GitHub — no APK release needed.
    */
 
-  var TAG = '[LordFlix/VixSrc]';
-  var DOMAIN = 'https://vixsrc.to';
-  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
+  var TAG = '[LordFlix/Peachify]';
+  var ENC_DEC = 'https://enc-dec.app/api';
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+  var ORIGIN = 'https://peachify.top';
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  var BASE_HEADERS = {
+    'User-Agent': USER_AGENT,
+    'Origin': ORIGIN,
+    'Referer': ORIGIN + '/',
+    'Accept': '*/*',
+  };
+
+  // Static server list from peachify.py
+  var SERVERS = [
+    { label: 'Wolf',   path: 'air',      api: 'https://usa.eat-peach.sbs' },
+    { label: 'Spider', path: 'holly',    api: 'https://usa.eat-peach.sbs' },
+    { label: 'Iron',   path: 'moviebox', api: 'https://uwu.eat-peach.sbs' },
+    { label: 'Multi',  path: 'multi',    api: 'https://usa.eat-peach.sbs' },
+    { label: 'Dark',   path: 'net',      api: 'https://uwu.eat-peach.sbs' },
+  ];
+
+  // ── HTTP helpers ──────────────────────────────────────────────────────────
 
   async function fetchGet(url, headers) {
     try {
-      var res = await fetch(url, { headers: headers, redirect: 'follow' });
+      var res = await fetch(url, { headers: headers || BASE_HEADERS, redirect: 'follow' });
       if (!res.ok) {
         console.warn(TAG + ' ❌ HTTP ' + res.status + ' for ' + url);
         return null;
       }
-      return res;
+      return await res.text();
     } catch (e) {
       console.warn(TAG + ' ❌ Network error: ' + e.message);
       return null;
     }
   }
 
-  /**
-   * Unescape a JS/JSON string value that may contain:
-   *   \/ → /
-   *   \u0026 → &
-   *   \u003d → =
-   *   \\ → \
-   */
-  function unescapeString(s) {
-    if (!s) return s;
+  async function fetchPost(url, body, headers) {
     try {
-      // Wrap in quotes and JSON.parse — handles all standard JSON escapes
-      return JSON.parse('"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\\\\\//g, '\\/') + '"');
-    } catch (e) {
-      // Manual fallback for common cases
-      return s
-        .replace(/\\\//g, '/')
-        .replace(/\\u0026/gi, '&')
-        .replace(/\\u003d/gi, '=')
-        .replace(/\\u003c/gi, '<')
-        .replace(/\\u003e/gi, '>')
-        .replace(/\\u0027/gi, "'")
-        .replace(/\\\\/g, '\\');
-    }
-  }
-
-  // ── Parse masterPlaylist from HTML scripts ────────────────────────────────
-
-  function parseMasterPlaylist(html) {
-    var allScripts = [];
-    var re = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-    var m;
-    while ((m = re.exec(html)) !== null) {
-      allScripts.push(m[1].trim());
-    }
-
-    // Try scripts[4] first (hacker's finding), then all
-    var candidates = [];
-    if (allScripts.length > 4) candidates.push(allScripts[4]);
-    for (var i = 0; i < allScripts.length; i++) candidates.push(allScripts[i]);
-
-    for (var j = 0; j < candidates.length; j++) {
-      var script = candidates[j];
-      if (!script.includes('masterPlaylist')) continue;
-
-      // Extract url value (may be JSON-escaped with \/ and \u0026)
-      var urlMatch =
-        script.match(/\burl\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/) ||
-        script.match(/\burl\s*:\s*'((?:[^'\\]|\\[\s\S])*)'/) ||
-        script.match(/"url"\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/);
-
-      if (!urlMatch) continue;
-      var rawUrl = urlMatch[1];
-      var playlistUrl = unescapeString(rawUrl);
-      console.log(TAG + ' 🔗 Raw url: ' + rawUrl);
-      console.log(TAG + ' 🔗 Unescaped url: ' + playlistUrl);
-
-      // Extract params object — extract each key-value pair individually
-      // (avoids JSON.parse issues with single-quoted strings and variable references)
-      var params = {};
-      var paramsBlockMatch = script.match(/\bparams\s*:\s*(\{[\s\S]*?\})/);
-      if (paramsBlockMatch) {
-        var paramsText = paramsBlockMatch[1];
-        var kvRegex = /\b(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?|true|false|null))/g;
-        var kv;
-        while ((kv = kvRegex.exec(paramsText)) !== null) {
-          var key = kv[1];
-          var val = kv[2] !== undefined ? kv[2]   // single-quoted string
-                  : kv[3] !== undefined ? kv[3]   // double-quoted string
-                  : kv[4];                         // number / bool / null
-          if (key && val !== undefined && val !== null && val !== 'null' && val !== 'false') {
-            params[key] = val;
-          }
-        }
-        var paramKeys = Object.keys(params);
-        if (paramKeys.length > 0) {
-          console.log(TAG + ' ✅ Parsed params (' + paramKeys.length + ' keys): ' + paramKeys.join(', '));
-        } else {
-          console.warn(TAG + ' ⚠️ params block found but no key-value pairs extracted — will use embed URL params');
-        }
+      var res = await fetch(url, { method: 'POST', headers: headers, body: body, redirect: 'follow' });
+      if (!res.ok) {
+        console.warn(TAG + ' ❌ HTTP ' + res.status + ' for POST ' + url);
+        return null;
       }
-
-      return { url: playlistUrl, params: params };
+      return await res.text();
+    } catch (e) {
+      console.warn(TAG + ' ❌ Network error POST: ' + e.message);
+      return null;
     }
-
-    return null;
   }
 
-  // ── Build final HLS URL ──────────────────────────────────────────────────
+  // ── HLS master playlist parser ────────────────────────────────────────────
 
-  function buildFinalUrl(playlistUrl, params, embedUrl) {
-    // Make absolute
-    if (!playlistUrl.startsWith('http')) {
-      playlistUrl = DOMAIN + (playlistUrl.startsWith('/') ? '' : '/') + playlistUrl;
-    }
+  async function parseHlsMaster(masterUrl, fetchHeaders) {
     try {
-      var u = new URL(playlistUrl);
-
-      // Merge params object (from masterPlaylist.params)
-      if (params) {
-        for (var key in params) {
-          if (Object.prototype.hasOwnProperty.call(params, key)) {
-            var val = params[key];
-            if (val !== null && val !== undefined && val !== false && val !== '') {
-              u.searchParams.set(key, val);
+      var body = await fetchGet(masterUrl, fetchHeaders);
+      if (!body || !body.includes('#EXT-X-STREAM-INF')) {
+        return [{ file: masterUrl, quality: 1080 }];
+      }
+      var variants = [];
+      var lines = body.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
+          var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/);
+          var bwMatch  = line.match(/BANDWIDTH=(\d+)/);
+          var height   = resMatch ? parseInt(resMatch[2], 10) : null;
+          var nextLine = (lines[i + 1] || '').trim();
+          if (!nextLine || nextLine.charAt(0) === '#') continue;
+          var varUrl = nextLine;
+          if (varUrl.indexOf('http') !== 0) {
+            if (varUrl.charAt(0) === '/') {
+              var originMatch = masterUrl.match(/^(https?:\/\/[^\/]+)/);
+              varUrl = originMatch ? originMatch[1] + varUrl : masterUrl;
+            } else {
+              var base = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+              varUrl = base + varUrl;
             }
           }
+          var quality = height || (bwMatch ? Math.round(parseInt(bwMatch[1], 10) / 150000) * 100 : 1080);
+          variants.push({ file: varUrl, quality: quality });
         }
       }
-
-      // If critical auth params are missing, inject ALL params from embed URL as fallback
-      // (token, expires, t, ub, b, and any other auth params the server requires)
-      var hasToken = u.searchParams.has('token') || u.searchParams.has('expires');
-      if (!hasToken && embedUrl) {
-        try {
-          var embedU = new URL(embedUrl);
-          embedU.searchParams.forEach(function(v, k) {
-            // Don't overwrite params already on the playlist URL
-            if (!u.searchParams.has(k)) u.searchParams.set(k, v);
-          });
-          console.log(TAG + ' 🔑 Injected all params from embed URL');
-        } catch (e) {
-          console.warn(TAG + ' ⚠️ Could not parse embed URL for fallback params');
-        }
-      }
-
-      u.searchParams.set('h', '1');
-      u.searchParams.set('lang', 'en');
-      return u.toString();
-    } catch (e) {
-      console.warn(TAG + ' ⚠️ URL build error: ' + e.message);
-      return playlistUrl + '?h=1&lang=en';
+      return variants.length > 0 ? variants : [{ file: masterUrl, quality: 1080 }];
+    } catch (_) {
+      return [{ file: masterUrl, quality: 1080 }];
     }
   }
 
-  // ── Main ─────────────────────────────────────────────────────────────────
+  // ── Main ──────────────────────────────────────────────────────────────────
 
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
     // Dual calling-convention:
@@ -181,83 +122,142 @@
     }
 
     try {
-      var baseHeaders = {
-        'User-Agent': USER_AGENT,
-        'Accept-Language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"'
-      };
+      var mediaType = isTv ? 'tv' : 'movie';
 
-      // Step 1 — API: get embed src
-      var apiUrl = isTv
-        ? DOMAIN + '/api/tv/' + tmdbId + '?s=' + (season || 1) + '&e=' + (episode || 1)
-        : DOMAIN + '/api/movie/' + tmdbId;
+      for (var i = 0; i < SERVERS.length; i++) {
+        var server = SERVERS[i];
 
-      console.log(TAG + ' 🚀 API: ' + apiUrl);
+        // Step 1: Build URL
+        var url = isTv
+          ? server.api + '/' + server.path + '/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
+          : server.api + '/' + server.path + '/movie/' + tmdbId;
 
-      var apiRes = await fetchGet(apiUrl, Object.assign({}, baseHeaders, {
-        'accept': 'application/json, text/plain, */*',
-        'priority': 'u=1, i',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'Referer': DOMAIN + (isTv ? '/tv/' + tmdbId : '/movie/' + tmdbId)
-      }));
-      if (!apiRes) return null;
+        console.log(TAG + ' 🚀 [' + server.label + '] GET ' + url);
 
-      var apiData;
-      try { apiData = await apiRes.json(); } catch (e) {
-        console.warn(TAG + ' ❌ API not JSON'); return null;
-      }
+        // Step 2: Fetch encrypted data
+        var encRaw = await fetchGet(url, BASE_HEADERS);
+        if (!encRaw) { console.warn(TAG + ' ⚠️ [' + server.label + '] No response'); continue; }
 
-      var src = apiData && (apiData.src || apiData.url || apiData.embed);
-      if (!src) {
-        console.warn(TAG + ' ❌ No src in API response: ' + JSON.stringify(apiData).substring(0, 120));
-        return null;
-      }
-      console.log(TAG + ' 📦 src = ' + src);
+        var encJson;
+        try { encJson = JSON.parse(encRaw); } catch (_) {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] Response not JSON');
+          continue;
+        }
 
-      // Step 2 — Fetch embed HTML
-      var embedUrl = src.startsWith('http') ? src : DOMAIN + (src.startsWith('/') ? src : '/' + src);
-      console.log(TAG + ' 🌐 Embed: ' + embedUrl);
+        var encData = encJson && (encJson.data || encJson.encrypted || encJson.text);
+        if (!encData || encData.trim() === '') {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] No encrypted data in response');
+          continue;
+        }
+        console.log(TAG + ' 🔑 [' + server.label + '] Got encrypted data (len=' + encData.length + ')');
 
-      var embedRes = await fetchGet(embedUrl, Object.assign({}, baseHeaders, {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'priority': 'u=0, i',
-        'sec-fetch-dest': 'iframe',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'same-origin',
-        'upgrade-insecure-requests': '1',
-        'Referer': DOMAIN + '/'
-      }));
-      if (!embedRes) return null;
-      var html = await embedRes.text();
-
-      // Step 3 — Parse masterPlaylist
-      var mp = parseMasterPlaylist(html);
-      if (!mp || !mp.url) {
-        console.warn(TAG + ' ❌ masterPlaylist not found');
-        return null;
-      }
-
-      // Step 4 — Build final URL (with embed URL as token fallback)
-      var finalUrl = buildFinalUrl(mp.url, mp.params, embedUrl);
-      console.log(TAG + ' ✅ Final URL: ' + finalUrl.substring(0, 120));
-
-      return {
-        url: finalUrl,
-        quality: 'Auto',
-        provider: 'LordFlix',
-        headers: {
+        // Step 3: Decrypt via enc-dec.app
+        var decUrl = ENC_DEC + '/dec-peachify';
+        var decHeaders = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'User-Agent': USER_AGENT,
-          'Referer': DOMAIN + '/',
-          'Origin': DOMAIN
-        },
-        subtitles: []
-      };
+          'Origin': ORIGIN,
+          'Referer': ORIGIN + '/',
+        };
+        var decRaw = await fetchPost(decUrl, JSON.stringify({ text: encData }), decHeaders);
+        if (!decRaw) { console.warn(TAG + ' ⚠️ [' + server.label + '] dec-peachify failed'); continue; }
+
+        var decJson;
+        try { decJson = JSON.parse(decRaw); } catch (_) { continue; }
+        if (decJson.status !== 200) {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] dec status=' + decJson.status + ' err=' + (decJson.error || ''));
+          continue;
+        }
+
+        var result = decJson.result;
+        if (!result || result.error) {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] ' + (result && result.error || 'no result'));
+          continue;
+        }
+
+        // Step 4: Parse streams
+        var streamArr = result.stream || result.sources || result.streams || [];
+        if (!Array.isArray(streamArr) || streamArr.length === 0) {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] No stream array');
+          continue;
+        }
+
+        var directQuality = [];
+        var subtitlesList = [];
+
+        for (var j = 0; j < streamArr.length; j++) {
+          var item = streamArr[j];
+
+          if (item.type === 'hls' && item.playlist) {
+            var hlsHeaders = {
+              'User-Agent': USER_AGENT,
+              'Referer': ORIGIN + '/',
+              'Origin': ORIGIN,
+            };
+            var hlsVariants = await parseHlsMaster(item.playlist, hlsHeaders);
+            var maxQ = hlsVariants.reduce(function(m, v) { return v.quality > m ? v.quality : m; }, 0) || 1080;
+            console.log(TAG + ' 📺 [' + server.label + '] HLS variants: ' + hlsVariants.length);
+            directQuality.push({ file: item.playlist, quality: maxQ, hlsVariants: hlsVariants });
+
+          } else if (item.type === 'file' && item.qualities) {
+            var qualKeys = Object.keys(item.qualities);
+            for (var q = 0; q < qualKeys.length; q++) {
+              var qKey = qualKeys[q];
+              var qObj = item.qualities[qKey];
+              var qUrl = qObj && (qObj.url || qObj.file || '');
+              var qNum = parseInt(qKey, 10) || 1080;
+              if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
+            }
+          }
+
+          // Subtitles / captions
+          var caps = item.captions || item.subtitles || item.tracks || [];
+          if (Array.isArray(caps)) {
+            for (var k = 0; k < caps.length; k++) {
+              var cap = caps[k];
+              var capUrl  = cap.url || cap.file || '';
+              var capLang = cap.language || cap.label || cap.lang || 'Unknown';
+              if (capUrl) subtitlesList.push({ url: capUrl, lang: capLang, label: capLang });
+            }
+          }
+        }
+
+        if (directQuality.length === 0) {
+          console.warn(TAG + ' ⚠️ [' + server.label + '] No quality URLs');
+          continue;
+        }
+
+        directQuality.sort(function(a, b) { return b.quality - a.quality; });
+        var primary = directQuality[0];
+
+        var qualitiesForPicker;
+        if (primary.hlsVariants && primary.hlsVariants.length > 1) {
+          qualitiesForPicker = primary.hlsVariants
+            .sort(function(a, b) { return b.quality - a.quality; })
+            .map(function(v) { return { url: v.file, quality: v.quality + 'p' }; });
+        } else {
+          qualitiesForPicker = directQuality.map(function(v) { return { url: v.file, quality: v.quality + 'p' }; });
+        }
+
+        console.log(TAG + ' ✅ [' + server.label + '] ' + directQuality.length + ' sources + ' + subtitlesList.length + ' subs');
+
+        return {
+          url: primary.file,
+          quality: primary.quality + 'p',
+          qualities: qualitiesForPicker,
+          provider: 'LordFlix',
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Referer': ORIGIN + '/',
+            'Origin': ORIGIN,
+          },
+          subtitles: subtitlesList,
+        };
+      }
+
+      console.warn(TAG + ' ❌ All Peachify servers exhausted');
+      return null;
 
     } catch (e) {
       console.error(TAG + ' 💥 Fatal: ' + e.message);

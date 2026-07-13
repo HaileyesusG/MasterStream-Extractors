@@ -176,49 +176,105 @@
           continue;
         }
 
-        // Step 4: Parse streams
-        var streamArr = result.stream || result.sources || result.streams || [];
-        if (!Array.isArray(streamArr) || streamArr.length === 0) {
-          console.warn(TAG + ' ⚠️ [' + server.label + '] No stream array');
-          continue;
-        }
+        // Debug: log result structure so we can see the format
+        var resultPreview = JSON.stringify(result).substring(0, 400);
+        console.log(TAG + ' 📦 [' + server.label + '] Result: ' + resultPreview);
 
+        // Step 4: Parse streams — try multiple formats
         var directQuality = [];
         var subtitlesList = [];
 
-        for (var j = 0; j < streamArr.length; j++) {
-          var item = streamArr[j];
+        // Format A: { stream: [{type, playlist/qualities}] }  — LordFlix style
+        var streamArr = result.stream;
 
-          if (item.type === 'hls' && item.playlist) {
-            var hlsHeaders = {
-              'User-Agent': USER_AGENT,
-              'Referer': ORIGIN + '/',
-              'Origin': ORIGIN,
-            };
-            var hlsVariants = await parseHlsMaster(item.playlist, hlsHeaders);
-            var maxQ = hlsVariants.reduce(function(m, v) { return v.quality > m ? v.quality : m; }, 0) || 1080;
-            console.log(TAG + ' 📺 [' + server.label + '] HLS variants: ' + hlsVariants.length);
-            directQuality.push({ file: item.playlist, quality: maxQ, hlsVariants: hlsVariants });
+        // Format B: { sources: [{file, type}] }  — JWPlayer style
+        var sourcesArr = result.sources || result.source;
 
-          } else if (item.type === 'file' && item.qualities) {
-            var qualKeys = Object.keys(item.qualities);
-            for (var q = 0; q < qualKeys.length; q++) {
-              var qKey = qualKeys[q];
-              var qObj = item.qualities[qKey];
-              var qUrl = qObj && (qObj.url || qObj.file || '');
-              var qNum = parseInt(qKey, 10) || 1080;
-              if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
+        // Format C: direct { url: "...", quality: "..." }
+        var directUrl = result.url || result.file || result.hls || result.m3u8;
+
+        if (Array.isArray(streamArr) && streamArr.length > 0) {
+          for (var j = 0; j < streamArr.length; j++) {
+            var item = streamArr[j];
+            var itemUrl = item.playlist || item.url || item.file || item.hls || item.m3u8 || '';
+            if (item.type === 'hls' && itemUrl) {
+              var hlsHeaders = { 'User-Agent': USER_AGENT, 'Referer': ORIGIN + '/', 'Origin': ORIGIN };
+              var hlsVariants = await parseHlsMaster(itemUrl, hlsHeaders);
+              var maxQ = hlsVariants.reduce(function(m, v) { return v.quality > m ? v.quality : m; }, 0) || 1080;
+              directQuality.push({ file: itemUrl, quality: maxQ, hlsVariants: hlsVariants });
+            } else if (item.type === 'file' && item.qualities) {
+              var qualKeys = Object.keys(item.qualities);
+              for (var q = 0; q < qualKeys.length; q++) {
+                var qObj = item.qualities[qualKeys[q]];
+                var qUrl = qObj && (qObj.url || qObj.file || '');
+                var qNum = parseInt(qualKeys[q], 10) || 1080;
+                if (qUrl) directQuality.push({ file: qUrl, quality: qNum });
+              }
+            } else if (itemUrl) {
+              // Generic stream item with a URL
+              var q2 = item.quality || item.res || item.label || 1080;
+              var qNum2 = parseInt(q2, 10) || 1080;
+              directQuality.push({ file: itemUrl, quality: qNum2 });
+            }
+            var caps = item.captions || item.subtitles || item.tracks || [];
+            if (Array.isArray(caps)) {
+              for (var k = 0; k < caps.length; k++) {
+                var cap = caps[k];
+                if (cap.kind && cap.kind !== 'captions' && cap.kind !== 'subtitles') continue;
+                var capUrl = cap.url || cap.file || '';
+                var capLang = cap.language || cap.label || cap.lang || 'Unknown';
+                if (capUrl) subtitlesList.push({ url: capUrl, lang: capLang, label: capLang });
+              }
             }
           }
-
-          // Subtitles / captions
-          var caps = item.captions || item.subtitles || item.tracks || [];
-          if (Array.isArray(caps)) {
-            for (var k = 0; k < caps.length; k++) {
-              var cap = caps[k];
-              var capUrl  = cap.url || cap.file || '';
-              var capLang = cap.language || cap.label || cap.lang || 'Unknown';
-              if (capUrl) subtitlesList.push({ url: capUrl, lang: capLang, label: capLang });
+        } else if (Array.isArray(sourcesArr) && sourcesArr.length > 0) {
+          // JWPlayer / Shaka format: sources array
+          for (var s = 0; s < sourcesArr.length; s++) {
+            var src = sourcesArr[s];
+            var srcUrl = src.file || src.url || src.src || '';
+            if (!srcUrl) continue;
+            var srcType = src.type || src.kind || '';
+            var isHls = srcType.indexOf('hls') !== -1 || srcUrl.indexOf('.m3u8') !== -1;
+            var srcQ = parseInt(src.label || src.quality || src.res || '0', 10) || 1080;
+            if (isHls) {
+              var hlsH = { 'User-Agent': USER_AGENT, 'Referer': ORIGIN + '/', 'Origin': ORIGIN };
+              var hlsV = await parseHlsMaster(srcUrl, hlsH);
+              var mQ = hlsV.reduce(function(m, v) { return v.quality > m ? v.quality : m; }, 0) || srcQ;
+              directQuality.push({ file: srcUrl, quality: mQ, hlsVariants: hlsV });
+            } else {
+              directQuality.push({ file: srcUrl, quality: srcQ });
+            }
+          }
+          // JWPlayer tracks for subtitles
+          var tracks = result.tracks || [];
+          if (Array.isArray(tracks)) {
+            for (var t = 0; t < tracks.length; t++) {
+              var tr = tracks[t];
+              if (tr.kind && tr.kind !== 'captions' && tr.kind !== 'subtitles') continue;
+              var trUrl = tr.file || tr.url || '';
+              var trLang = tr.label || tr.language || tr.lang || 'Unknown';
+              if (trUrl) subtitlesList.push({ url: trUrl, lang: trLang, label: trLang });
+            }
+          }
+        } else if (directUrl) {
+          // Simplest format: just a URL
+          var isHls2 = directUrl.indexOf('.m3u8') !== -1;
+          if (isHls2) {
+            var hlsH2 = { 'User-Agent': USER_AGENT, 'Referer': ORIGIN + '/', 'Origin': ORIGIN };
+            var hlsV2 = await parseHlsMaster(directUrl, hlsH2);
+            var mQ2 = hlsV2.reduce(function(m, v) { return v.quality > m ? v.quality : m; }, 0) || 1080;
+            directQuality.push({ file: directUrl, quality: mQ2, hlsVariants: hlsV2 });
+          } else {
+            directQuality.push({ file: directUrl, quality: 1080 });
+          }
+          // Subtitles at result level
+          var resSubs = result.subtitles || result.captions || result.tracks || [];
+          if (Array.isArray(resSubs)) {
+            for (var rs = 0; rs < resSubs.length; rs++) {
+              var sub = resSubs[rs];
+              var subUrl = sub.url || sub.file || '';
+              var subLang = sub.language || sub.label || sub.lang || 'Unknown';
+              if (subUrl) subtitlesList.push({ url: subUrl, lang: subLang, label: subLang });
             }
           }
         }

@@ -31,10 +31,10 @@
     'Accept': '*/*',
   };
 
-  // Static server list from peachify.py
+  // Static server list — Spider first (fastest, peachify.top default)
   var SERVERS = [
-    { label: 'Wolf',   path: 'air',      api: 'https://usa.eat-peach.sbs' },
     { label: 'Spider', path: 'holly',    api: 'https://usa.eat-peach.sbs' },
+    { label: 'Wolf',   path: 'air',      api: 'https://usa.eat-peach.sbs' },
     { label: 'Iron',   path: 'moviebox', api: 'https://uwu.eat-peach.sbs' },
     { label: 'Multi',  path: 'multi',    api: 'https://usa.eat-peach.sbs' },
     { label: 'Dark',   path: 'net',      api: 'https://uwu.eat-peach.sbs' },

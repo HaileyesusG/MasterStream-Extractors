@@ -24,8 +24,8 @@
 
   var BASE_HEADERS = {
     'Accept': '*/*',
-    'Origin': 'https://lordflix.org',
-    'Referer': 'https://lordflix.org',
+    'Origin': 'https://lordflix.su',
+    'Referer': 'https://lordflix.su',
     'User-Agent': USER_AGENT,
   };
 
@@ -310,8 +310,8 @@
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'User-Agent': USER_AGENT,
-          'Origin': 'https://lordflix.org',
-          'Referer': 'https://lordflix.org/',
+          'Origin': 'https://lordflix.su',
+          'Referer': 'https://lordflix.su/',
         };
         var decRaw = await fetchPost(ENC_DEC + '/dec-lordflix', JSON.stringify({ text: encText }), decHeaders);
         if (!decRaw) { console.warn(TAG + ' ⚠️ [' + server + '] dec-lordflix failed'); continue; }
@@ -336,8 +336,8 @@
             var masterUrl = streamItem.playlist;
             var hlsVariants = await parseHlsMaster(masterUrl, {
               'User-Agent': USER_AGENT,
-              'Referer': 'https://lordflix.org/',
-              'Origin': 'https://lordflix.org',
+              'Referer': 'https://lordflix.su/',
+              'Origin': 'https://lordflix.su',
             });
             var maxQ = 1080;
             for (var v = 0; v < hlsVariants.length; v++) {
@@ -395,8 +395,8 @@
           provider: 'VidSrcCC',
           headers: {
             'User-Agent': USER_AGENT,
-            'Referer': 'https://lordflix.org/',
-            'Origin': 'https://lordflix.org',
+            'Referer': 'https://lordflix.su/',
+            'Origin': 'https://lordflix.su',
           },
           subtitles: subtitlesList,
         };

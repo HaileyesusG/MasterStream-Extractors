@@ -280,7 +280,8 @@
 
         // Step 1b: Solve a FRESH challenge per server (challenge is single-use)
         var attest = await solveChallenge();
-        if (!attest) { console.warn(TAG + ' ⚠️ [' + server + '] Challenge failed — skipping'); continue; }
+        if (!attest) { console.warn(TAG + ' ⚠️ [' + server + '] No challenge — proceeding without x-attest'); }
+
 
         console.log(TAG + ' 🚀 Trying server: ' + server);
 

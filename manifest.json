@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-    "version": 114,
-=======
-    "version": 115,
->>>>>>> 8aa702c5cf8772afefa0b5cd7a11acd491963bda
+    "version": 116,
     "providerPriority": [
         "VidFast",
         "Vidlink",
@@ -40,7 +36,7 @@
             "file": "extractors/VidlinkExtractor.js",
             "hash": "53A4A4CA71C84FEE74915DED01A33227",
             "nativeMode": false,
-            "mediaTypes": ["movie","tv"]
+            "mediaTypes": ["movie", "tv"]
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
@@ -71,12 +67,3 @@
         }
     }
 }
-
-
-
-
-
-
-
-
-

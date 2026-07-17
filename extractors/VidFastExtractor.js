@@ -1,5 +1,5 @@
 /**
- * VidFastExtractor — self-contained CommonJS JS for remote hot-update.
+ * VidFastExtractor ΓÇö self-contained CommonJS JS for remote hot-update.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VidFastExtractor.js
  *
  * To update: edit this file, run Update-Manifest.ps1, commit and push.
@@ -7,7 +7,7 @@
  */
 (function () {
   var TAG = '[VidFastExtractor]';
-  // -- Media type support � change here to enable/disable for movies or TV --
+  // -- Media type support ∩┐╜ change here to enable/disable for movies or TV --
   var SUPPORTS_MOVIE = true;
   var SUPPORTS_TV    = true;
 
@@ -19,8 +19,8 @@
 
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
     // Dual calling-convention support:
-    //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
-    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
+    //   Mobile app: extract(tmdbId, isTv, season, episode)               ΓÇö 4 params
+    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) ΓÇö 7 params
     var isTv, season, episode;
     if (typeof arg1 === 'boolean') {
       isTv = arg1; season = arg2; episode = arg3; // mobile
@@ -35,7 +35,7 @@
         ? DOMAIN + '/tv/' + tmdbId + '/' + season + '/' + episode + '/'
         : DOMAIN + '/movie/' + tmdbId;
 
-      console.log(TAG + ' 🚀 Fetching page: ' + pageUrl);
+      console.log(TAG + ' ≡ƒÜÇ Fetching page: ' + pageUrl);
 
       var pageHeaders = {
         'User-Agent': USER_AGENT,
@@ -45,7 +45,7 @@
 
       var pageRes = await fetch(pageUrl, { headers: pageHeaders });
       if (!pageRes.ok) {
-        console.warn(TAG + ' ❌ HTTP ' + pageRes.status + ' for ' + pageUrl);
+        console.warn(TAG + ' Γ¥î HTTP ' + pageRes.status + ' for ' + pageUrl);
         return null;
       }
       var html = await pageRes.text();
@@ -54,28 +54,28 @@
       // The page embeds encrypted data in two possible forms:
       //   Form 1 (within a JSON string value): \"en\":\"ABC...\"
       //   Form 2 (plain JS object):             "en":"ABC..."
-      // We try both — Form 1 is needed when the text is double-encoded;
+      // We try both ΓÇö Form 1 is needed when the text is double-encoded;
       // Form 2 is what OkHttpClient bridge returns (strings are already decoded).
       var match = html.match(/\\"en\\":\\"(.*?)\\"/) ||
                   html.match(/"en"\s*:\s*"([^"]+)"/);
       if (!match) {
-        console.warn(TAG + ' ❌ Could not find encrypted text in page');
+        console.warn(TAG + ' Γ¥î Could not find encrypted text in page');
         return null;
       }
       var encText = match[1];
-      console.log(TAG + ' 🔑 Found encrypted text (' + encText.length + ' chars)');
+      console.log(TAG + ' ≡ƒöæ Found encrypted text (' + encText.length + ' chars)');
 
       // Step 2: Get enc-vidfast data (servers URL, stream base URL, CSRF token)
       var encRes = await fetch(
         ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText) + '&version=' + VERSION
       );
       if (!encRes.ok) {
-        console.warn(TAG + ' ❌ enc-vidfast HTTP ' + encRes.status);
+        console.warn(TAG + ' Γ¥î enc-vidfast HTTP ' + encRes.status);
         return null;
       }
       var encData = await encRes.json();
       if (encData.status !== 200 || !encData.result) {
-        console.warn(TAG + ' ❌ enc-vidfast failed: ' + encData.error);
+        console.warn(TAG + ' Γ¥î enc-vidfast failed: ' + encData.error);
         return null;
       }
 
@@ -90,7 +90,7 @@
         headers: pageHeaders,
       });
       if (!serversRes.ok) {
-        console.warn(TAG + ' ❌ servers POST HTTP ' + serversRes.status);
+        console.warn(TAG + ' Γ¥î servers POST HTTP ' + serversRes.status);
         return null;
       }
       var serversEnc = await serversRes.text();
@@ -102,16 +102,16 @@
       });
       var decServersData = await decServersRes.json();
       if (decServersData.status !== 200 || !decServersData.result || !decServersData.result.length) {
-        console.warn(TAG + ' ❌ dec-vidfast servers failed: ' + decServersData.error);
+        console.warn(TAG + ' Γ¥î dec-vidfast servers failed: ' + decServersData.error);
         return null;
       }
 
       var servers = decServersData.result;
       var serverNames = servers.map(function(s) { return s.name; }).join(', ');
-      console.log(TAG + ' 📡 Got ' + servers.length + ' servers: ' + serverNames);
+      console.log(TAG + ' ≡ƒôí Got ' + servers.length + ' servers: ' + serverNames);
 
-      // Preferred server order — edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['vRapid', 'vEdge', 'Cobra', 'vFast', 'Charlie', 'Bravo'];
+      // Preferred server order ΓÇö edit here to change priority (GitHub hot-update)
+      var PREFERRED_SERVERS = ['vRapid','vEdge', 'Cobra','vFast','Charlie', 'Bravo'];
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);
@@ -119,9 +119,9 @@
         if (bi === -1) bi = PREFERRED_SERVERS.length;
         return ai - bi;
       });
-      console.log(TAG + ' 📋 Server order after priority: ' + servers.map(function(s) { return s.name; }).join(', '));
+      console.log(TAG + ' ≡ƒôï Server order after priority: ' + servers.map(function(s) { return s.name; }).join(', '));
 
-      // Step 4: Try each server — fetch stream and decrypt
+      // Step 4: Try each server ΓÇö fetch stream and decrypt
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
         try {
@@ -141,12 +141,12 @@
           var decStreamData = await decStreamRes.json();
 
           if (decStreamData.status !== 200 || !decStreamData.result || !decStreamData.result.url) {
-            console.warn(TAG + ' ⚠️ ' + server.name + ' dec-vidfast stream failed: ' + decStreamData.error);
+            console.warn(TAG + ' ΓÜá∩╕Å ' + server.name + ' dec-vidfast stream failed: ' + decStreamData.error);
             continue;
           }
 
           var resultObj = decStreamData.result;
-          console.log(TAG + ' ✅ Stream extracted from server: ' + server.name);
+          console.log(TAG + ' Γ£à Stream extracted from server: ' + server.name);
 
           // Parse subtitles
           var subtitles = [];
@@ -162,12 +162,10 @@
             }
           }
 
-          // Build playback headers — the CDN enforces Referer on HLS segments.
-          // Use whatever referer hint the server gave us, otherwise fall back to vidfast.vc.
-          // The key insight: both the master playlist AND each .ts segment must match.
+          // Use referer hint from decrypted result if present, else fall back to vidfast.vc.
+          // This is critical for TV ExoPlayer: the CDN enforces Referer on every .ts segment.
           var streamReferer = resultObj.referer || resultObj.origin || (DOMAIN + '/');
-          // Strip trailing slash inconsistency
-          if (streamReferer && streamReferer.charAt(streamReferer.length - 1) !== '/') {
+          if (streamReferer.charAt(streamReferer.length - 1) !== '/') {
             streamReferer = streamReferer + '/';
           }
           var streamOrigin = streamReferer.replace(/\/$/, '');
@@ -178,7 +176,7 @@
             'Origin': streamOrigin,
           };
 
-          console.log(TAG + ' 📡 [' + server.name + '] Using Referer: ' + streamReferer);
+          console.log(TAG + ' 📡 [' + server.name + '] Referer: ' + streamReferer);
 
           return {
             url: resultObj.url,
@@ -188,14 +186,14 @@
             subtitles: subtitles,
           };
         } catch (err) {
-          console.warn(TAG + ' ❌ ' + server.name + ' error: ' + err.message);
+          console.warn(TAG + ' Γ¥î ' + server.name + ' error: ' + err.message);
         }
       }
 
-      console.warn(TAG + ' ❌ All VidFast servers exhausted');
+      console.warn(TAG + ' Γ¥î All VidFast servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' ❌ Fatal error: ' + e.message);
+      console.error(TAG + ' Γ¥î Fatal error: ' + e.message);
       return null;
     }
   }

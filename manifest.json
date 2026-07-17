@@ -1,11 +1,15 @@
 {
+<<<<<<< HEAD
     "version": 114,
+=======
+    "version": 115,
+>>>>>>> 8aa702c5cf8772afefa0b5cd7a11acd491963bda
     "providerPriority": [
-        "LordFlix",
-        "Videasy",
-        "Vidlink",
-        "VixSrc",
         "VidFast",
+        "Vidlink",
+        "Videasy",
+        "VixSrc",
+        "LordFlix",
         "OzTv",
         "VidSrc",
         "VidSrcCC",

@@ -111,7 +111,7 @@
       console.log(TAG + ' 📡 Got ' + servers.length + ' servers: ' + serverNames);
 
       // Preferred server order — edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['vEdge', 'Cobra', 'Bravo'];
+      var PREFERRED_SERVERS = ['vRapid', 'vEdge', 'Cobra', 'vFast', 'Charlie', 'Bravo'];
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);
@@ -162,13 +162,23 @@
             }
           }
 
+          // Build playback headers — the CDN enforces Referer on HLS segments.
+          // Use whatever referer hint the server gave us, otherwise fall back to vidfast.vc.
+          // The key insight: both the master playlist AND each .ts segment must match.
+          var streamReferer = resultObj.referer || resultObj.origin || (DOMAIN + '/');
+          // Strip trailing slash inconsistency
+          if (streamReferer && streamReferer.charAt(streamReferer.length - 1) !== '/') {
+            streamReferer = streamReferer + '/';
+          }
+          var streamOrigin = streamReferer.replace(/\/$/, '');
+
           var playbackHeaders = {
             'User-Agent': USER_AGENT,
-            Referer: DOMAIN + '/',
+            'Referer': streamReferer,
+            'Origin': streamOrigin,
           };
-          if (!resultObj.noReferrer) {
-            playbackHeaders['Referer'] = DOMAIN + '/';
-          }
+
+          console.log(TAG + ' 📡 [' + server.name + '] Using Referer: ' + streamReferer);
 
           return {
             url: resultObj.url,

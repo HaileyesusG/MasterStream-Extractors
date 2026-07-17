@@ -1,5 +1,5 @@
 {
-    "version": 112,
+    "version": 114,
     "providerPriority": [
         "LordFlix",
         "Videasy",
@@ -10,9 +10,16 @@
         "VidSrc",
         "VidSrcCC",
         "MyFlixerz",
-        "VidlinkSniffer"
+        "VidlinkSniffer",
+        "VidApi"
     ],
     "providers": {
+        "VidApi": {
+            "file": "extractors/VidApiExtractor.js",
+            "hash": "VIDAPI_V1",
+            "nativeMode": true,
+            "mediaTypes": ["movie", "tv"]
+        },
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
             "hash": "0C33486D5BDA12136216FA21C9D509E4",

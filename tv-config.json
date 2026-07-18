@@ -1,8 +1,8 @@
 {
-  "version": 97,
+  "version": 98,
   "providerPriority": [
-    "Vidlink",
     "Videasy",
+    "Vidlink",
     "VixSrc",
     "VidFast",
     "LordFlix",

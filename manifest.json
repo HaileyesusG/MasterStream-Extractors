@@ -14,12 +14,7 @@
         "VidApi"
     ],
     "providers": {
-        "VidApi": {
-            "file": "extractors/VidApiExtractor.js",
-            "hash": "VIDAPI_V1",
-            "nativeMode": true,
-            "mediaTypes": ["movie", "tv"]
-        },
+        
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
             "hash": "0C33486D5BDA12136216FA21C9D509E4",

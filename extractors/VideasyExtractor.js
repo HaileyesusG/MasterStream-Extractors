@@ -91,7 +91,7 @@
 
       // cdn (Yoru) is movies-only with built-in subtitles and possible 4K → try it FIRST for movies.
       // TV series will skip it automatically (guard at line below) and fall through to jett.
-      var servers = ['cdn', 'm4uhd', 'jett', 'neon2', 'downloader2', 'ym', 'tejo', 'hdmovie'];
+      var servers = ['m4uhd', 'cdn', 'jett', 'neon2', 'downloader2', 'ym', 'tejo', 'hdmovie'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

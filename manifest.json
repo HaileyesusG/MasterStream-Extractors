@@ -1,10 +1,10 @@
 {
-    "version": 128,
+    "version": 129,
     "providerPriority": [
         "VidFast",
-        "Vidlink",
+        "Videasy",
         "VixSrc",
-        "Videasy ",
+        "Vidlink",
         "LordFlix",
         "OzTv",
         "VidSrc",

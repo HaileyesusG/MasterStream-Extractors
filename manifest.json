@@ -1,5 +1,5 @@
 {
-    "version": 131,
+    "version": 132,
     "providerPriority": [
         "VidFast",
         "VixSrc",
@@ -17,13 +17,13 @@
         
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "0C33486D5BDA12136216FA21C9D509E4",
+            "hash": "62746CE3E3C3DCF2D75ABCA9E2CAA44F",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
-            "hash": "56CBBC73302E11925CE6C1B96E4F9E4C",
+            "hash": "608D5F8CCB1D247CF4B05700C1304EF2",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -35,29 +35,29 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "98AEA0CB0619F823E91882EFB6925C70",
+            "hash": "70C4C36FE0DFDF1FF448B2843D8CC9A3",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "B9CDACF94EEC8D2F0E235A8702910BF1",
+            "hash": "A0DF45077E98FA700A1EF18924A62293",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": "VIXSRC_REWRITE_V1",
+            "hash": "74CEF51A21A5F441FAE037E9442FD34E",
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrc": {
             "file": "extractors/VidSrcExtractor.js",
-            "hash": "",
+            "hash": "C1E58FDBCCB3B943C64AD3692081E181",
             "mediaTypes": ["movie", "tv"]
         },
         "OzTv": {
             "file": "extractors/OzTvExtractor.js",
-            "hash": "",
+            "hash": "DF167BAC5D82915D5A274EC734347108",
             "mediaTypes": ["movie", "tv"]
         }
     }

@@ -1,21 +1,11 @@
 {
-<<<<<<< Updated upstream
-  "version": 111,
-  "providerPriority": [
-     "VidFast",
-     "VixSrc",
-     "Videasy",
-     "Vidlink",
-     "LordFlix"
-=======
-  "version": 89,
+  "version": 112,
   "providerPriority": [
     "VidFast",
     "VixSrc",
     "Videasy",
     "Vidlink",
     "LordFlix"
->>>>>>> Stashed changes
   ],
   "Videasy": {
     "domain": "https://api.wingsdatabase.com",

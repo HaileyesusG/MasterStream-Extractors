@@ -110,7 +110,7 @@
       console.log(TAG + ' ≡ƒôí Got ' + servers.length + ' servers: ' + serverNames);
 
       // Preferred server order ΓÇö edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['vRapid', 'vEdge', 'Cobra', 'vFast', 'Charlie', 'Bravo'];
+      var PREFERRED_SERVERS = ['vRapid', 'Cobra', 'vFast', 'Charlie', 'Bravo']; // vEdge skipped — slow CDN
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);

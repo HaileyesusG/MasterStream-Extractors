@@ -1,15 +1,25 @@
 {
-  "version": 112,
+<<<<<<< Updated upstream
+  "version": 111,
   "providerPriority": [
-     "Videasy",
-     "VixSrc",
      "VidFast",
+     "VixSrc",
+     "Videasy",
      "Vidlink",
      "LordFlix"
+=======
+  "version": 89,
+  "providerPriority": [
+    "VidFast",
+    "VixSrc",
+    "Videasy",
+    "Vidlink",
+    "LordFlix"
+>>>>>>> Stashed changes
   ],
   "Videasy": {
-    "domain": "https://api.videasy.to",
-    "serverPath": "/mb-flix/sources-with-title",
+    "domain": "https://api.wingsdatabase.com",
+    "serverPath": "/cdn/sources-with-title",
     "decryptUrl": "https://enc-dec.app/api/dec-videasy",
     "referer": "https://player.videasy.to/",
     "origin": "https://player.videasy.to",
@@ -18,6 +28,6 @@
   "Vidlink": {
     "baseUrl": "https://vidlink.pro",
     "encApi": "https://enc-dec.app/api/enc-vidlink",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
   }
 }

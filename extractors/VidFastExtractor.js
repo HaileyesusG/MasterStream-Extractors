@@ -45,25 +45,24 @@
 
       var pageRes = await fetch(pageUrl, { headers: pageHeaders });
       if (!pageRes.ok) {
-        console.warn(TAG + ' Γ¥î HTTP ' + pageRes.status + ' for ' + pageUrl);
+        console.warn(TAG + ' ❌ HTTP ' + pageRes.status + ' for ' + pageUrl);
         return null;
       }
       var html = await pageRes.text();
 
-      // Extract the encrypted "en" text from page JSON.
-      // The page embeds encrypted data in two possible forms:
-      //   Form 1 (within a JSON string value): \"en\":\"ABC...\"
-      //   Form 2 (plain JS object):             "en":"ABC..."
-      // We try both ΓÇö Form 1 is needed when the text is double-encoded;
-      // Form 2 is what OkHttpClient bridge returns (strings are already decoded).
-      var match = html.match(/\\"en\\":\\"(.*?)\\"/) ||
+      // Extract the encrypted token from the page JSON.
+      // Server-side update (2026-07): field renamed from "en" to "token".
+      // Try "token" first (new), then fall back to "en" (old) for compatibility.
+      var match = html.match(/\\\"token\\\":\\\"(.*?)\\\"/) ||
+                  html.match(/"token"\s*:\s*"([^"]+)"/) ||
+                  html.match(/\\\"en\\\":\\\"(.*?)\\\"/) ||
                   html.match(/"en"\s*:\s*"([^"]+)"/);
       if (!match) {
-        console.warn(TAG + ' Γ¥î Could not find encrypted text in page');
+        console.warn(TAG + ' ❌ Could not find encrypted text in page (tried token + en fields)');
         return null;
       }
       var encText = match[1];
-      console.log(TAG + ' ≡ƒöæ Found encrypted text (' + encText.length + ' chars)');
+      console.log(TAG + ' 🔑 Found encrypted text (' + encText.length + ' chars)');
 
       // Step 2: Get enc-vidfast data (servers URL, stream base URL, CSRF token)
       var encRes = await fetch(

@@ -10,7 +10,7 @@
  * To re-enable: restore the servers loop below.
  */
 (function () {
-  var TAG = '[VideasyExtractor]';
+  var TAG = '[LordFlixExtractor]';
 
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     console.log(TAG + ' \u26d4 Temporarily disabled — skipping to let VidFast win');

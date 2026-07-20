@@ -1,5 +1,5 @@
 {
-    "version": 132,
+    "version": 133,
     "providerPriority": [
         "VidFast",
         "VixSrc",
@@ -17,47 +17,47 @@
         
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "62746CE3E3C3DCF2D75ABCA9E2CAA44F",
+            "hash": "B27DF49BA702BF23A0927E6F36DF0B16",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "Videasy": {
             "file": "extractors/VideasyExtractor.js",
-            "hash": "608D5F8CCB1D247CF4B05700C1304EF2",
+            "hash": "E6A6649FCEFDD1C782995369ED2742F9",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "Vidlink": {
             "file": "extractors/VidlinkExtractor.js",
-            "hash": "53A4A4CA71C84FEE74915DED01A33227",
+            "hash": "39277728893A84774F058FE5F362CBD7",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "70C4C36FE0DFDF1FF448B2843D8CC9A3",
+            "hash": "B25067080E465EE5DEF5501A9198AC3A",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrcCC": {
             "file": "extractors/VidSrcCCExtractor.js",
-            "hash": "A0DF45077E98FA700A1EF18924A62293",
+            "hash": "B8DE53E4715667EA05E8D0FA4849F702",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": "74CEF51A21A5F441FAE037E9442FD34E",
+            "hash": "AD130F021BA9F595E7A48720A150A28B",
             "mediaTypes": ["movie", "tv"]
         },
         "VidSrc": {
             "file": "extractors/VidSrcExtractor.js",
-            "hash": "C1E58FDBCCB3B943C64AD3692081E181",
+            "hash": "3284807A718377BEEA57F564385561C9",
             "mediaTypes": ["movie", "tv"]
         },
         "OzTv": {
             "file": "extractors/OzTvExtractor.js",
-            "hash": "DF167BAC5D82915D5A274EC734347108",
+            "hash": "4F93962D92C6B1FDBA6AE182F095F5D3",
             "mediaTypes": ["movie", "tv"]
         }
     }

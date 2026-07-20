@@ -1,5 +1,5 @@
 {
-    "version": 133,
+    "version": 134,
     "providerPriority": [
         "VidFast",
         "VixSrc",
@@ -17,7 +17,7 @@
         
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "B27DF49BA702BF23A0927E6F36DF0B16",
+            "hash": "DF6A79CE4121BC3754605D046E6000B0",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },

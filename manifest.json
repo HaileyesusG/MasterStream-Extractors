@@ -1,5 +1,5 @@
 {
-    "version": 135,
+    "version": 136,
     "providerPriority": [
         "VidFast",
         "VixSrc",
@@ -9,6 +9,7 @@
         "OzTv",
         "VidSrc",
         "VidSrcCC",
+        "VidSrcMe",
         "MyFlixerz",
         "VidlinkSniffer",
         "VidApi"
@@ -58,6 +59,12 @@
         "OzTv": {
             "file": "extractors/OzTvExtractor.js",
             "hash": "4F93962D92C6B1FDBA6AE182F095F5D3",
+            "mediaTypes": ["movie", "tv"]
+        },
+        "VidSrcMe": {
+            "file": "extractors/VidSrcMeExtractor.js",
+            "hash": "77DFA42AF5E7C903DC06FA6774A639B8",
+            "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         }
     }

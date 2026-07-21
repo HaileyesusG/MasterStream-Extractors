@@ -1,5 +1,5 @@
 {
-    "version": 134,
+    "version": 135,
     "providerPriority": [
         "VidFast",
         "VixSrc",
@@ -17,7 +17,7 @@
         
         "VidFast": {
             "file": "extractors/VidFastExtractor.js",
-            "hash": "DF6A79CE4121BC3754605D046E6000B0",
+            "hash": "F6D9F23056166E9CC758C4885571D7B4",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },
@@ -35,7 +35,7 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "B25067080E465EE5DEF5501A9198AC3A",
+            "hash": "57E725C3F66E6055671C166661DF74C0",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         },

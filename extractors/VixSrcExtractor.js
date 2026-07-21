@@ -70,15 +70,12 @@
         return null;
       }
 
-      // Extract the encrypted token from the page JSON.
-      // Server-side update (2026-07): field renamed from "en" to "token".
-      // Try "token" first (new), then fall back to "en" (old) for compatibility.
-      var textMatch = htmlDetail.match(/\\\"token\\\":\\\"(.*?)\\\"/) ||
-                      htmlDetail.match(/"token"\s*:\s*"([^"]+)"/) ||
-                      htmlDetail.match(/\\\"en\\\":\\\"(.*?)\\\"/) ||
-                      htmlDetail.match(/"en"\s*:\s*"([^"]+)"/);
+      // Extract the encrypted text from the page JSON.
+      // Combined regex scanning for both "en" and "token" field names (per enc-dec.app recommendation).
+      var textMatch = htmlDetail.match(/\\\"(?:en|token)\\\":\\\"(.*?)\\\"/) ||
+                      htmlDetail.match(/"(?:en|token)"\s*:\s*"([^"]+)"/);
       if (!textMatch || !textMatch[1]) {
-        console.warn(TAG + ' ❌ No encrypted text found in page (tried token + en fields)');
+        console.warn(TAG + ' ❌ No encrypted text found in page');
         return null;
       }
       var text = textMatch[1];

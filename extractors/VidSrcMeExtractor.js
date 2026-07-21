@@ -115,7 +115,8 @@
               'Referer': iframe2Src,
               'User-Agent': UA,
               'Origin': 'https://' + getHost(iframe2Src)
-            }
+            },
+            subtitles: []
           };
         }
       }

@@ -1,5 +1,5 @@
 {
-    "version": 137,
+    "version": 138,
     "providerPriority": [
         "VidSrcMe",
         "VixSrc",
@@ -63,7 +63,7 @@
         },
         "VidSrcMe": {
             "file": "extractors/VidSrcMeExtractor.js",
-            "hash": "77DFA42AF5E7C903DC06FA6774A639B8",
+            "hash": "9B20BD2E9CA92014DE9524C7BAF3160C",
             "nativeMode": false,
             "mediaTypes": ["movie", "tv"]
         }

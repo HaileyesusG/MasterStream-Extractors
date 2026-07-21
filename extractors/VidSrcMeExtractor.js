@@ -86,25 +86,20 @@
       if (!urlsMatch) { console.log('[VidSrcMe] \u274c No master_urls found'); return null; }
       var masterUrls = urlsMatch[1];
 
-      // Step 4: Hydrate tokens — fetch BOTH in parallel (independent requests)
-      var needsPg = masterUrls.indexOf('__TOKENPG__') !== -1;
-      var needsAmalgam = masterUrls.indexOf('__TOKEN__') !== -1;
-      var amalgamHostMatch = needsAmalgam ? masterUrls.match(/https?:\/\/([^\/]+)/) : null;
+      // Step 4: Hydrate __TOKENPG__ (putgate CDN)
+      if (masterUrls.indexOf('__TOKENPG__') !== -1) {
+        var pgToken = await httpGet('https://app2.putgate.com/generate.php');
+        if (pgToken) masterUrls = masterUrls.split('__TOKENPG__').join(pgToken.trim());
+      }
 
-      var tokens = await Promise.all([
-        needsPg
-          ? httpGet('https://app2.putgate.com/generate.php')
-          : Promise.resolve(null),
-        (needsAmalgam && amalgamHostMatch)
-          ? httpGet('https://' + amalgamHostMatch[1] + '/generate.php')
-          : Promise.resolve(null)
-      ]);
-
-      var pgToken = tokens[0];
-      var aToken  = tokens[1];
-
-      if (pgToken) masterUrls = masterUrls.split('__TOKENPG__').join(pgToken.trim());
-      if (aToken)  masterUrls = masterUrls.split('__TOKEN__').join(aToken.trim());
+      // Hydrate __TOKEN__ (amalgam CDN) — fetch from same host as first URL
+      if (masterUrls.indexOf('__TOKEN__') !== -1) {
+        var hostMatch = masterUrls.match(/https?:\/\/([^\/]+)/);
+        if (hostMatch) {
+          var aToken = await httpGet('https://' + hostMatch[1] + '/generate.php');
+          if (aToken) masterUrls = masterUrls.split('__TOKEN__').join(aToken.trim());
+        }
+      }
 
       // Step 5: Return first valid stream URL
       var urlList = masterUrls.split(' or ');

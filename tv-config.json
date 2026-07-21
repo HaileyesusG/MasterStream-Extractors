@@ -1,6 +1,7 @@
 {
-  "version": 114,
+  "version": 115,
   "providerPriority": [
+    "VidSrcMe",
     "VidFast",
     "Videasy",
     "VixSrc",

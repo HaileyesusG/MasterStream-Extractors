@@ -42,7 +42,7 @@
     return src;
   }
 
-  async function extract(tmdbId, isTv, season, episode) {
+  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
     try {
       // Step 1: Build embed URL and parse #player_iframe
       var embedUrl = isTv

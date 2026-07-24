@@ -46,7 +46,7 @@
     try {
       // Step 1: Build embed URL and parse #player_iframe
       var embedUrl = isTv
-        ? BASE_URL + '/embed/tv/' + tmdbId + '/' + season + '-' + episode
+        ? BASE_URL + '/embed/tv/' + tmdbId + '/' + season + '/' + episode
         : BASE_URL + '/embed/' + tmdbId;
 
       console.log('[VidSrcMe] \ud83d\ude80 Fetching: ' + embedUrl);

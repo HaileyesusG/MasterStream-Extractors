@@ -1,6 +1,7 @@
 {
-    "version": 141,
+    "version": 142,
     "providerPriority": [
+        "VaPlayer",
         "VidSrcMe",
         "Videasy",
         "VixSrc",

@@ -134,7 +134,7 @@
       console.log(TAG + ' 📡 Got ' + serversList.length + ' servers: ' + serversList.map(function(s) { return s.name; }).join(', '));
 
       // Preferred server order — edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['Prime', 'Horizon', 'Orbit'];
+      var PREFERRED_SERVERS = ['Supreme', 'Prime', 'Horizon', 'Orbit'];
       serversList = serversList.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);

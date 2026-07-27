@@ -1,6 +1,7 @@
 {
-  "version": 115,
+  "version": 116,
   "providerPriority": [
+    "VaPlayer",
     "VidSrcMe",
     "VidFast",
     "Videasy",

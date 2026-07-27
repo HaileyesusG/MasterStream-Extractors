@@ -1,8 +1,7 @@
 {
-    "version": 142,
+    "version": 143,
     "providerPriority": [
-        "VaPlayer",
-        "VidSrcMe",
+        "VidFast",
         "Videasy",
         "VixSrc",
         "Vidlink",
@@ -10,10 +9,11 @@
         "OzTv",
         "VidSrc",
         "VidSrcCC",
-        "VidFast",
+        "VaPlayer",
         "MyFlixerz",
         "VidlinkSniffer",
-        "VidApi"
+        "VidApi",
+        "VidSrcMe"
     ],
     "providers": {
         

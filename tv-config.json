@@ -1,8 +1,8 @@
 {
-  "version": 120,
+  "version": 121,
   "providerPriority": [
+    "Videasy ",
     "VidFast",
-    "Videasy",
     "VixSrc",
     "VaPlayer",
     "Vidlink",

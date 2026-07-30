@@ -283,11 +283,12 @@
   //   salt    = SHA-256("pow2-salt|{s}|{b}")   (was: hexToBytes(s))
   //   payload = "pow2|{b}|{s}|{counter}"        (was: "{b}:{s}:{counter}")
   //
-  // ⚠️ IMPORTANT: scrypt is CPU-intensive. We yield to the JS event loop every
-  // YIELD_EVERY iterations via setTimeout(0) so the UI stays responsive
-  // (back button, touches) while solving. Without this, the RN JS thread freezes.
-  var YIELD_EVERY = 50;
+  // ⚠️ IMPORTANT: scrypt is CPU-intensive. We:
+  //   1. Yield to the JS event loop after EVERY iteration so the UI stays responsive
+  //   2. Enforce a hard 15-second wall-clock deadline so the loop self-terminates
+  //      instead of running invisibly in the background after the provider timeout fires.
   function yieldToUI() { return new Promise(function(r) { setTimeout(r, 0); }); }
+  var CHALLENGE_TIMEOUT_MS = 15000; // give up after 15s — other providers will win
 
   async function solveChallenge(rid) {
     try {
@@ -300,10 +301,17 @@
       var salt = sha256Bytes(strToBytes('pow2-salt|' + ch.s + '|' + ch.b));
 
       var maxIter = Math.pow(2, 32);
-      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ', yielding every ' + YIELD_EVERY + ' iters)...');
+      var deadline = Date.now() + CHALLENGE_TIMEOUT_MS;
+      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ', timeout=15s)...');
       for (var counter = 0; counter < maxIter; counter++) {
-        // Yield to event loop periodically so the UI stays responsive
-        if (counter > 0 && counter % YIELD_EVERY === 0) await yieldToUI();
+        // Hard deadline — stop looping after 15s so we don't run in the background forever
+        if (Date.now() > deadline) {
+          console.warn(TAG + ' ⏱ Challenge timed out after 15s at counter=' + counter + ' — skipping');
+          return null;
+        }
+
+        // Yield after EVERY iteration so UI events (back button, touches) are processed
+        await yieldToUI();
 
         // New payload format: "pow2|{b}|{s}|{counter}"
         var payload = strToBytes('pow2|' + ch.b + '|' + ch.s + '|' + counter);

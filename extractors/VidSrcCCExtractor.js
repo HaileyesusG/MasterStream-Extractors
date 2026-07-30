@@ -202,6 +202,55 @@
     return out;
   }
 
+  // ── Standalone SHA-256 (used for salt derivation in challenge solver) ─────────
+  function sha256Bytes(data) {
+    var K = [
+      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+    ];
+    var msg = Array.from(data);
+    msg.push(0x80);
+    while (msg.length % 64 !== 56) msg.push(0);
+    var bits = data.length * 8;
+    msg.push(0,0,0,0,(bits>>>24)&0xff,(bits>>>16)&0xff,(bits>>>8)&0xff,bits&0xff);
+    var h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a;
+    var h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+    for (var o = 0; o < msg.length; o += 64) {
+      var w = [];
+      for (var t = 0; t < 16; t++)
+        w[t] = ((msg[o+t*4]<<24)|(msg[o+t*4+1]<<16)|(msg[o+t*4+2]<<8)|msg[o+t*4+3])>>>0;
+      for (var t = 16; t < 64; t++) {
+        var v=w[t-15],s0=((v>>>7)|(v<<25))^((v>>>18)|(v<<14))^(v>>>3);
+        var v2=w[t-2], s1=((v2>>>17)|(v2<<15))^((v2>>>19)|(v2<<13))^(v2>>>10);
+        w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+      }
+      var a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+      for (var t = 0; t < 64; t++) {
+        var S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));
+        var ch=(e&f)^((~e>>>0)&g);
+        var T1=(h+S1+ch+K[t]+w[t])>>>0;
+        var S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));
+        var maj=(a&b)^(a&c)^(b&c);
+        var T2=(S0+maj)>>>0;
+        h=g;g=f;f=e;e=(d+T1)>>>0;d=c;c=b;b=a;a=(T1+T2)>>>0;
+      }
+      h0=(h0+a)>>>0;h1=(h1+b)>>>0;h2=(h2+c)>>>0;h3=(h3+d)>>>0;
+      h4=(h4+e)>>>0;h5=(h5+f)>>>0;h6=(h6+g)>>>0;h7=(h7+h)>>>0;
+    }
+    var out = new Uint8Array(32);
+    [h0,h1,h2,h3,h4,h5,h6,h7].forEach(function(v,i){
+      out[i*4]=(v>>>24)&0xff; out[i*4+1]=(v>>>16)&0xff;
+      out[i*4+2]=(v>>>8)&0xff; out[i*4+3]=v&0xff;
+    });
+    return out;
+  }
+
   // ── Count leading zero bits in Uint8Array ────────────────────────────────────
   function countLeadingZeroBits(data) {
     var count = 0;
@@ -230,18 +279,24 @@
   }
 
   // ── Solve CineJoy scrypt challenge ──────────────────────────────────────────
-  // Returns base64-encoded JSON payload for the x-at header.
+  // Updated to match latest cinejoy.py:
+  //   salt    = SHA-256("pow2-salt|{s}|{b}")   (was: hexToBytes(s))
+  //   payload = "pow2|{b}|{s}|{counter}"        (was: "{b}:{s}:{counter}")
   async function solveChallenge(rid) {
     try {
       var resp = await fetch(API_BASE + '/challenge?rid=' + rid, { headers: BASE_HEADERS });
       if (!resp.ok) { console.warn(TAG + ' ⚠️ Challenge fetch failed: ' + resp.status); return null; }
       var ch = JSON.parse(await resp.text());
-      // ch = { b, s (hex), n, r, p, d (required leading-zero bits) }
-      var salt = hexToBytes(ch.s);
+      // ch = { b, s, n, r, p, d (required leading-zero bits) }
+
+      // Derive salt via SHA-256 of "pow2-salt|{s}|{b}" (new format)
+      var salt = sha256Bytes(strToBytes('pow2-salt|' + ch.s + '|' + ch.b));
+
       var maxIter = Math.pow(2, 32);
       console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ')...');
       for (var counter = 0; counter < maxIter; counter++) {
-        var payload = ch.b + ':' + ch.s + ':' + counter;
+        // New payload format: "pow2|{b}|{s}|{counter}"
+        var payload = strToBytes('pow2|' + ch.b + '|' + ch.s + '|' + counter);
         var result = scrypt(payload, salt, ch.n, ch.r, ch.p, 32);
         if (countLeadingZeroBits(result) >= ch.d) {
           var solved = Object.assign({}, ch, { c: counter });

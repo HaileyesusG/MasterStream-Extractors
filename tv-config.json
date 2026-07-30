@@ -1,5 +1,5 @@
 {
-  "version": 122,
+  "version": 123,
   "providerPriority": [
     "VaPlayer",
     "VidFast",
@@ -10,7 +10,7 @@
     "LordFlix"
   ],
   "Videasy": {
-    "domain": "https://api.wingsdatabase.com",
+    "domain": "https://api.speedracelight.com",
     "serverPath": "/cdn/sources-with-title",
     "decryptUrl": "https://enc-dec.app/api/dec-videasy",
     "referer": "https://player.videasy.to/",

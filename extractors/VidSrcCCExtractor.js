@@ -282,6 +282,13 @@
   // Updated to match latest cinejoy.py:
   //   salt    = SHA-256("pow2-salt|{s}|{b}")   (was: hexToBytes(s))
   //   payload = "pow2|{b}|{s}|{counter}"        (was: "{b}:{s}:{counter}")
+  //
+  // ⚠️ IMPORTANT: scrypt is CPU-intensive. We yield to the JS event loop every
+  // YIELD_EVERY iterations via setTimeout(0) so the UI stays responsive
+  // (back button, touches) while solving. Without this, the RN JS thread freezes.
+  var YIELD_EVERY = 50;
+  function yieldToUI() { return new Promise(function(r) { setTimeout(r, 0); }); }
+
   async function solveChallenge(rid) {
     try {
       var resp = await fetch(API_BASE + '/challenge?rid=' + rid, { headers: BASE_HEADERS });
@@ -293,8 +300,11 @@
       var salt = sha256Bytes(strToBytes('pow2-salt|' + ch.s + '|' + ch.b));
 
       var maxIter = Math.pow(2, 32);
-      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ')...');
+      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ', yielding every ' + YIELD_EVERY + ' iters)...');
       for (var counter = 0; counter < maxIter; counter++) {
+        // Yield to event loop periodically so the UI stays responsive
+        if (counter > 0 && counter % YIELD_EVERY === 0) await yieldToUI();
+
         // New payload format: "pow2|{b}|{s}|{counter}"
         var payload = strToBytes('pow2|' + ch.b + '|' + ch.s + '|' + counter);
         var result = scrypt(payload, salt, ch.n, ch.r, ch.p, 32);

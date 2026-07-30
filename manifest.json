@@ -1,14 +1,14 @@
 {
-    "version": 152,
+    "version": 153,
     "providerPriority": [
-        "VidSrcCC",
-        "VixSrc",
         "Videasy",
+        "VidFast",
+        "VixSrc",
         "Vidlink",
         "LordFlix",
         "OzTv",
         "VidSrc",
-        "VidFast",
+        "VidSrcCC",
         "VaPlayer",
         "MyFlixerz",
         "VidlinkSniffer",

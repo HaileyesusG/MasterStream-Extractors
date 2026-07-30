@@ -285,41 +285,39 @@
   //
   // ⚠️ IMPORTANT: scrypt is CPU-intensive. We:
   //   1. Yield to the JS event loop after EVERY iteration so the UI stays responsive
-  //   2. Enforce a hard 15-second wall-clock deadline so the loop self-terminates
-  //      instead of running invisibly in the background after the provider timeout fires.
+  //   2. Accept a shared globalDeadline so the ENTIRE extraction (all servers) stops
+  //      together — not each server independently.
   function yieldToUI() { return new Promise(function(r) { setTimeout(r, 0); }); }
-  var CHALLENGE_TIMEOUT_MS = 15000; // give up after 15s — other providers will win
 
-  async function solveChallenge(rid) {
+  // solveChallenge now takes a shared globalDeadline (ms epoch) instead of its own timeout.
+  async function solveChallenge(rid, globalDeadline) {
     try {
       var resp = await fetch(API_BASE + '/challenge?rid=' + rid, { headers: BASE_HEADERS });
       if (!resp.ok) { console.warn(TAG + ' ⚠️ Challenge fetch failed: ' + resp.status); return null; }
       var ch = JSON.parse(await resp.text());
       // ch = { b, s, n, r, p, d (required leading-zero bits) }
 
-      // Derive salt via SHA-256 of "pow2-salt|{s}|{b}" (new format)
+      // Derive salt via SHA-256 of "pow2-salt|{s}|{b}"
       var salt = sha256Bytes(strToBytes('pow2-salt|' + ch.s + '|' + ch.b));
 
       var maxIter = Math.pow(2, 32);
-      var deadline = Date.now() + CHALLENGE_TIMEOUT_MS;
-      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ', timeout=15s)...');
+      var remaining = Math.max(0, globalDeadline - Date.now());
+      console.log(TAG + ' 🧩 Solving scrypt challenge (d=' + ch.d + ', remaining=' + Math.round(remaining/1000) + 's)...');
       for (var counter = 0; counter < maxIter; counter++) {
-        // Hard deadline — stop looping after 15s so we don't run in the background forever
-        if (Date.now() > deadline) {
-          console.warn(TAG + ' ⏱ Challenge timed out after 15s at counter=' + counter + ' — skipping');
+        // Stop if the GLOBAL extraction deadline is exceeded
+        if (Date.now() > globalDeadline) {
+          console.warn(TAG + ' ⏱ Global deadline exceeded at counter=' + counter + ' — aborting all servers');
           return null;
         }
 
         // Yield after EVERY iteration so UI events (back button, touches) are processed
         await yieldToUI();
 
-        // New payload format: "pow2|{b}|{s}|{counter}"
         var payload = strToBytes('pow2|' + ch.b + '|' + ch.s + '|' + counter);
         var result = scrypt(payload, salt, ch.n, ch.r, ch.p, 32);
         if (countLeadingZeroBits(result) >= ch.d) {
           var solved = Object.assign({}, ch, { c: counter });
-          var json = JSON.stringify(solved);
-          var b64 = btoa(unescape(encodeURIComponent(json)));
+          var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(solved))));
           console.log(TAG + ' ✅ Challenge solved at counter=' + counter);
           return b64;
         }
@@ -404,6 +402,13 @@
       if (isTv  && !SUPPORTS_TV)    { console.log(TAG + ' Skip TV');    return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' Skip Movie'); return null; }
 
+      // Global deadline for the ENTIRE extraction — shared across all server attempts.
+      // Each scrypt call takes ~5s, so 25s allows ~5 iterations across all servers combined.
+      // Once this expires, solveChallenge returns null and the loop breaks immediately.
+      var EXTRACT_TIMEOUT_MS = 25000;
+      var globalDeadline = Date.now() + EXTRACT_TIMEOUT_MS;
+      var MAX_SERVERS = 2; // only try 2 servers max — no point burning 8×15s
+
       // Step 1: Get server list
       var servers = ['Lisbon', 'Mapple', 'Solara', 'Arrow', 'Leo']; // fallback
       try {
@@ -414,16 +419,23 @@
             servers = srvJson.servers
               .filter(function(s) { return s.status === 'ok'; })
               .map(function(s) { return s.name; });
-            console.log(TAG + ' 📡 Servers: ' + servers.join(', '));
+            console.log(TAG + ' 📡 Servers (' + servers.length + '): ' + servers.join(', '));
           }
         }
       } catch (_) { console.warn(TAG + ' ⚠️ Could not fetch servers, using fallback'); }
 
+      // Cap how many servers we attempt
+      servers = servers.slice(0, MAX_SERVERS);
       var mediaType = isTv ? 'series' : 'movie';
 
       for (var i = 0; i < servers.length; i++) {
+        // Stop if global deadline already passed (e.g. first server's challenge ate it all)
+        if (Date.now() > globalDeadline) {
+          console.warn(TAG + ' ⏱ Global deadline passed — aborting remaining servers');
+          break;
+        }
         var server = servers[i];
-        console.log(TAG + ' 🖥️ Trying server: ' + server);
+        console.log(TAG + ' 🖥️ Trying server: ' + server + ' (' + (i+1) + '/' + servers.length + ')');
 
         // Step 2: Build API URL and encode via enc-dec.app
         var apiUrl = API_BASE + '/?type=' + mediaType +
@@ -447,7 +459,7 @@
         console.log(TAG + ' 🔑 [' + server + '] enc token ok (' + enc.length + ' chars)');
 
         // Step 3: Solve scrypt challenge
-        var xAt = await solveChallenge(enc);
+        var xAt = await solveChallenge(enc, globalDeadline);
         if (!xAt) { console.warn(TAG + ' ⚠️ [' + server + '] Challenge failed — skipping'); continue; }
 
         // Step 4: Fetch encrypted media data

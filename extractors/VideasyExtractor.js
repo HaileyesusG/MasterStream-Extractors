@@ -4,19 +4,18 @@
  *
  * Reference: https://github.com/smy778/EncDecEndpoints/blob/main/samples/videasy.py
  *
- * Servers (api.wingsdatabase.com):
- *   jett       = Original audio
- *   cdn (Yoru) = Original audio — Movies only, may have 4K
- *   tejo       = Original audio
- *   neon2      = Original audio
- *   ym (Sage)  = Original audio
- *   downloader2 (Cypher) = Original audio
- *   m4uhd (Breach) = Original audio
- *   hdmovie (Vyse) = English only
+ * Servers (api.speedracelight.com):
+ *   cdn    (Yoru)    = Original audio — may have 4K
+ *   m4uhd  (Breach)  = Original audio
+ *   vsrc   (Neon)    = Original audio
+ *   hdmovie(Vyse)    = English only
+ *   meine  (Killjoy) = German
+ *   lamovie(Omen)    = Spanish
+ *   superflix(Raze)  = Portuguese
  */
 (function () {
   var TAG = '[VideasyExtractor]';
-  var DOMAIN = 'https://api.wingsdatabase.com';
+  var DOMAIN = 'https://api.speedracelight.com';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   // ── Media type support — change here to enable/disable for movies or TV ──
@@ -89,9 +88,9 @@
       // Step 2: Double-encode title (intentional — API expects this format)
       var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
 
-      // cdn (Yoru) is movies-only with built-in subtitles and possible 4K → try it FIRST for movies.
-      // TV series will skip it automatically (guard at line below) and fall through to jett.
-      var servers = ['cdn', 'm4uhd', 'jett', 'neon2', 'downloader2', 'ym', 'tejo', 'hdmovie'];
+      // Servers ordered by quality/priority. cdn(Yoru) first for potential 4K.
+      // vsrc(Neon) is new, listed before old servers.
+      var servers = ['cdn', 'm4uhd', 'vsrc', 'hdmovie', 'lamovie', 'superflix'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

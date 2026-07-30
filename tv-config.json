@@ -1,10 +1,10 @@
 {
-  "version": 123,
+  "version": 124,
   "providerPriority": [
-    "VaPlayer",
+    "Videasy",
     "VidFast",
     "VixSrc",
-    "Videasy",
+    "VaPlayer",
     "Vidlink",
     "VidSrcMe",
     "LordFlix"

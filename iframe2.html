@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Obsession (2025)</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="origin" />
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+
+
+
+    #loading_overlay {
+        background-color: rgba(0, 0, 0, .7);
+        width: 100%;
+        height: 100%;
+        opacity: 0.8;
+        position: absolute;
+        z-index: 999;
+        background-image: url(/rings.svg?_=349834);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 100px 100px;
+    }
+    /* scroll */
+    /* Hide the default scrollbar */
+    ::-webkit-scrollbar {
+      position: absolute;
+      width: 5px; /* Width of the scrollbar */
+    }
+    
+    
+    /* Track (the area on which the scrollbar is rendered) */
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0); /* Track background color */
+    }
+    
+    /* Handle (the draggable part of the scrollbar) */
+    ::-webkit-scrollbar-thumb {
+      background: #888; /* Handle background color */
+      border-radius: 3px; /* Handle border radius */
+    }
+    
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555; /* Handle background color on hover */
+    }
+    
+
+        
+    pjsdiv:has(> #player_parent_settings) {
+        box-shadow: 0 -1px 10px black;
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+    }
+    
+    
+    .hidden {
+        display:none !important;
+    }
+    
+    
+    
+    #pjs_player_parent_subtitle {
+        display: block !important;
+    }
+    
+    
+    #player_parent , #player {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    html {
+        margin:0;
+        width:100%;
+        height:100%;
+    }
+    body {
+        margin:0;
+        width:100%;
+        height:100%;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    
+    
+    :root {
+        --plyr-color-main: #e600e6;
+        --webkit-text-track-display: none;
+    }
+    
+    .plyr__menu__container div[role="menu"] {
+        max-height: calc(100vh - 100px) !important;
+        overflow-y: auto !important;
+    }
+    
+    .plyr {
+        height: 100%;
+    }
+    
+    .plyr--full-ui ::-webkit-media-text-track-container {
+        display: var(--webkit-text-track-display);
+    }
+    
+    .plyr__captions {
+        font-size: 21px !important;
+        font-family: Arial !important;
+    }
+    .plyr__controls{
+        z-index: 999999;
+    }
+    .plyr__progress {
+        z-index: 999999;
+    }
+    
+    #player_parent_control_showSubtitles {
+        display: none;
+    }
+    
+    #player_parent_control_unmute_button {
+        opacity: 0.8;
+    }
+    
+    #player_parent_control_unmute_button pjsdiv:nth-child(3) {
+        width:95px !important;
+    }
+    #player_parent_control_unmute_button:hover {
+        opacity: 1;
+    }
+    #player_parent_control_unmute_button::after {
+        content: " UNMUTE";
+        background: #000;
+        padding: 6px 5px 4px 5px;
+        margin-left: 12px;
+        font-size: 12px;
+        margin-top: -12px;
+        position: absolute;
+        border-radius: 3px;
+        font-weight: bold;
+        pointer-events: none;
+    }
+    
+    #subtitles_button img {
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    .reporting_window {
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 150px !important;
+    }
+    
+    .reporting_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .reporting_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .reporting_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    
+    .reporting_window .header #close {
+        float: right;
+    }
+    
+    .reporting_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .reporting_window .content div {
+        color: white;
+        padding: 0px 5px;
+        overflow-wrap: anywhere;
+    }
+    
+    .reporting_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    }
+    
+    .reporting_window .content * {
+        cursor: pointer;
+    }
+    
+    .reporting_window #sentReport {
+        margin: 10px;
+    }
+    
+    
+    
+    
+    .subtitles_window {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        border-top-left-radius: 5px !important;
+        border-bottom-left-radius: 5px !important;
+        box-shadow: 0px -1px 7px black !important;
+        font-size:14px;
+        display: none;
+        color: white;
+        right: 0;
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 65px);
+        bottom: 60px;
+        z-index: 999;
+        overflow:hidden;
+        background: #333333;
+        max-width: 300px !important;
+    }
+    
+    .subtitles_loader {
+        position: absolute;
+        width: 100%;
+        height: calc(100% - 30px);
+        margin-top: 30px;
+        background: rgba(0,0,0,0.7);
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5em;
+        display: none;
+    }
+    .subtitles_loader::after {
+        content: 'Loading...';
+    }
+    
+    .subtitles_window .header {
+        width: 100%;
+        height: 30px;
+    }
+    
+    .subtitles_window .header i {
+        font-size: 14px;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+    .subtitles_window .header i:hover {
+        cursor: pointer;
+    }
+    
+    .subtitles_window .header #back {
+        float: left;
+        display: none;
+    }
+    .subtitles_window .header #close {
+        float: right;
+    }
+    
+    .subtitles_window .header #title {
+        font-size: 14px;
+        line-height: 30px;
+        font-weight: bold;
+    }
+    
+    .subtitles_window .content {
+        width: 100%;
+        height: calc(100% - 30px);
+        overflow: hidden;
+        overflow-y: auto;
+        font-size: 0.8rem;
+    }
+    
+    .subtitles_window .content div {
+        color: white;
+        padding: 7px 10px;
+        overflow-wrap: anywhere;
+    }
+    
+    .subtitles_window .content div:hover {
+        cursor: pointer;
+        background-color: #222222;
+    } 
+    
+    
+    .subtitles_window .content .subtitle_active {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .subtitles_window .content .lang {
+        font-weight: bold;
+    }
+    
+    
+    
+    #player_parent_control_player_logo svg {
+        width:56px !important;
+        height:22.75px !important;
+    }
+    
+    
+        
+    @media (max-width: 400px) {
+        
+        #player_parent_control_reportingButton {
+            display: none !important;
+        }
+        
+        #player_parent_control_player_logo {
+            display: none !important;
+        }
+    }
+    
+    .loader {
+        top: calc(50% - 24px);
+        left: calc(50% - 24px);
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border: 5px solid;
+        border-color: #e600e6 transparent;
+        border-radius: 50%;
+        display: none;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+    
+    @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+    
+    
+</style>
+
+</head>
+<body data-i="37287335"  >
+    
+
+    <div id="loading_overlay"></div>
+
+
+    <div id="player_parent">
+    </div>
+    
+    <div id="reporting_content" style="display: none;">
+                
+        
+        <div class='header'>
+            <i id="close" class="fa-solid fa-xmark"></i>
+        </div>
+        <div class='content'>
+            <div>
+                <input type="radio" id="reportError" name="problem" value="file_error" checked="checked">
+                <label for="reportError" >File Error</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportVideo" name="problem" value="wrong_video">
+                <label for="reportVideo">Wrong Video</label><br>
+            </div>
+            <div>
+                <input type="radio" id="reportAudio" name="problem" value="wrong_audio">
+                <label for="reportAudio">Wrong Audio</label><br>
+            </div>
+            n
+            <div>
+                <input id="math" type="hidden" name="math" value="7-1" />
+                <p>
+                    7-1 = <input id="solution" type="number" name="solution" min="0" max="9"/>
+                </p>
+            </div>
+            
+            <button id="sentReport" data-hash="Y2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--">Sent report</button>
+        </div>
+    </div>
+    
+    
+    
+    <!--
+    <div id="xTyBxQyGTA" style="display:none;">L=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</div>
+    -->
+    
+    
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.3/pako.min.js"></script>
+    
+    
+    <srcipt src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></srcipt>
+
+        
+
+    <script src="/pjs/pjs_main_drv_cast.190626.js?_=1781899734"></script>
+
+    <script src="/srt2vtt.js?t=1780702291"></script>
+    
+
+
+    
+    
+    <script src="/subtitles_pjs_24.04.js?t=1780702185"></script>
+    
+    <script src="/reporting.js?t=1780702292"></script>
+    
+    
+    <script src="/tprs/src/parser.js?_=1780702292"></script>
+    <script src="/tprs/src/handlers.js?_=1780702292"></script>
+    <script src="/tprs/index.js?_=1780702292"></script>
+    
+    <script src="/sbx.js?t=1780702291"></script>
+        
+    <!--
+    <script src="/sV05kUlNvOdOxvtC/07d708a0a39d7c4a97417b9b70a9fdfc.js?_=1780702292"></script>
+    -->
+
+    <script>
+    
+    
+        
+        var ds_langs = [];
+        var ds_lang = false;
+        var sub_shown_lang = "";
+        
+        
+        
+        
+        var flnm = removeExtension(atob('T2JzZXNzaW9uICgyMDI1KSBbMTA4MHBdIFtXRUJSaXBdIFs1LjFdIFtZVFMuR0cgLSBZVFMuQlpdL09ic2Vzc2lvbi4yMDI1LjEwODBwLldFQlJpcC54MjY0LkFBQzUuMS1bWVRTLkdHIC0gWVRTLkJaXS5tcDQ='));
+        
+        
+        flnm = flnm.split("/");
+        var flnm_data = [];
+        for (const key in flnm) {
+            flnm_data.push(tprs.parse(flnm[key]));
+        }
+        
+        var pljs_sub_lang = localStorage.getItem("pljssubtitle");
+        if(typeof pljs_sub_lang === 'string' || pljs_sub_lang instanceof String){
+            for (let lang of sub_langs) {
+                var tmp_lang_regexp = new RegExp(lang.LanguageName, "i");
+                if(tmp_lang_regexp.test(pljs_sub_lang)){
+                    ds_lang = lang;
+                    break;
+                }
+            }
+        }
+    
+        var player;
+        var watched;
+        var video;
+        
+        
+        
+    
+                ds_lang = get_lang_from_iso639(JSON.parse('[]')[0]);
+                
+                
+        
+        var pass_path = "//amalgamanomaly.space/rt_ping.php";
+        
+        var ping_interval = false;
+        
+        
+        var subs_shown = false;
+        var the_subtitles = [];
+        
+        var default_subtitles = "";
+          
+                    default_subtitles = "[]";
+                    
+        
+        
+        
+                var db_subs = [];
+                
+        
+        var lc_on = IsLcOn();
+        
+        var current_sub_name = "cs_"+$("body").data("i");
+        
+        if($("body").data("s") && $("body").data("e")){
+            current_sub_name += "_"+$("body").data("s")+"x"+$("body").data("e");
+        }
+        
+        if(default_subtitles.length > 0){
+            the_subtitles = default_subtitles.split(",");
+            //player.api("subtitle",default_subtitles);
+        }
+        
+        
+                
+        
+        var master_urls = "https://amalgamanomaly.space/pl/H4sIAAAAAAAAAwXByVKDMAAA0F8iYSk400stayUYJhu5QUILJNGoOK39et9LozCFKoz0DFMwZQd4HbPxmqgDTJROguxlepoHFxa04PQzPJdWf9C4E4uZ_nbDziyZ3C2iwSdEhcczW3q16YKUvsN0CLWLLzy3dhB9MlP2NZoMkO0UTUX9zd09RMav2uQP7kBBNmYVjbHc.p1U8nUAzUUa24_ce.RMMJLFatEISTTlrrgPXEXYMYvXfSeiWXv4CFpeg.7cl63TeZcP8C1AAEHvqUM1MrKkTv8yzirp0phyGdJiqVprt3d8PP4DQWM09wkBAAA-/master.m3u8?token=__TOKEN__ or https://amalgamanomaly.space/pl/H4sIAAAAAAAAAw3O206DMBgA4FfqYRgw2YXIChIhtLR_6e44lHCoTGfjkKfX7wm.6CkIbDuGfR8QjEOKcTdaSmlPSTd2lDz3svSw5bL4CNq6yTf7GinQVzUkYuNyknWi0IBvh3G3U9dwpDDksMRTTfzcpvujhILCAQhS9xhWfwjWI76a3aYmuM7h3Wbm0FlO9eq_7RZz0xRocFPV6qGot0_G4QVJpH6ucPltZankxkydlNX_Yxf6chdrtEAKay_dl3Rv5B0xpnDZyFTEtVYnYGLiKvCS.EoQT4rDXXTmCrvus0GsMhSWip_Pf8mqzzAJAQAA/master.m3u8?token=__TOKEN__ or https://app2.putgate.com/cdnstr/H4sIAAAAAAAAAwXBy46CMBQA0F_qA7GYuDBKJdXeaOGWwK6lGhSsmjgj.vWew0KXpYKc_Zz40J3TmUiFE45w4bhIMr7A7Z26jWFHRv_BQmy.QSPvddj0YKh6ujKjIbYHm_cF5vRPS6VBGvS5vZ9uJrHszcrCHOphuoRoqC4en7ZoEsBpv6fytfu2iIMZ4SOIj7LyXFUYbXkcptpVsnFEQVOFWb1.ab.1SSfHHUg1na7h2RGLmq8IyJF6Mix_QaTIVs0AAAA-/list.m3u8?token=__TOKENPG__";
+        
+                $.get("https://app2.putgate.com/generate.php", function(token) {
+            master_urls = master_urls.replaceAll("__TOKENPG__",token);
+                
+        $.get("https://amalgamanomaly.space/generate.php", function(token) {
+            
+            $("#loading_overlay").remove();
+            
+            master_urls = master_urls.replaceAll("__TOKEN__",token);
+            
+                        player = new Playerjs({id:"player_parent", file: master_urls , cuid:"849e5db8b23e6db0619e30ee8d868d83",poster:"//image.tmdb.org/t/p/w780/5kY3Aw2abeqr3YCJB6xourYMoma.jpg" , ready:"PlayerReady" , autoplay:1 , subtitle: default_subtitles , "default_quality":"max"});    
+                
+        
+        
+        
+        
+        
+        if(player.api("subtitles").length > 1 && ds_lang){
+            setStartSubtitle();
+        }else if(player.api("subtitles").length === 1){
+            player.api("subtitle" , player.api("subtitles").length-1);
+        }
+        
+                
+        
+        
+        if(lc_on){
+            current_sub = localStorage.getItem(current_sub_name);
+            if(typeof current_sub === 'string' && isJson(current_sub)){
+                current_sub = JSON.parse(current_sub);
+                if(current_sub.lang_short != sub_shown_lang){
+                    addSubtitle(current_sub);
+                }
+            }
+        }
+        
+        video = $("#player_parent").find("video")[0];
+    
+    
+        
+                watched = {
+            value: 0,
+            report: 0,
+            interval: false ,
+            duration: 0,
+            set: function (value) {
+                this.value = value;
+                this.onChange();
+            },
+            onChange: function(){
+                //console.log(this.value);
+                //console.log(this.duration);
+                if(this.duration > 0){
+                    if(this.report < 5){
+                        var limit = this.duration*0.05;
+                        if(limit < 30){
+                            limit = 30
+                        }
+                        if(this.value > limit){
+                            this.report = 5;
+                            $.get("/fsdD/Y2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                        }
+                        /*
+                        if(this.value > (this.duration*0.05)){
+                            this.report = 5;
+                            $.get("/vsdV/Y2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                        }
+                        */
+                    }
+                    
+                }
+            },
+            setDur: function(dur){
+                this.duration = dur;
+            }
+        }
+                
+        });
+        
+                });
+                
+        function PlayerReady(){
+            gen_subs_el();
+            gen_reporting_el();
+        }
+    
+    
+            
+        var pm_player_data = {type:"PLAYER_EVENT"};
+        var pm_time_last_update = 0;
+        var pm_time_last_update_use = false;
+        
+        pm_player_data.data = {
+            imdbId: "tt37287335",
+            tmdbId: 1339713,
+            type: "movie",
+            season: false,
+            episode: false,
+            currentTime: 0,
+            duration: 0
+        };
+    
+        function PlayerjsEvents(event,id,data){
+            
+            if(event=="play"){
+                
+                
+                
+                
+                if(!ping_interval)
+                    restart_ping_interval();
+                
+                pm_player_data.data.event = "play";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+                
+                if(!watched.interval){
+                    watched.interval = setInterval(function(){
+                        if(player.api("playing")){
+                            watched.set(watched.value+1);
+                            if(watched.value % 60 == 0){
+                                //$.get("/watched");
+                            }
+                        }
+                    },1000);
+                }
+            }
+            
+            if(event == "pause"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "pause";
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            if(event == "time"){
+                if((Date.now() - pm_time_last_update) > 5000){
+                    pm_time_last_update = Date.now();
+                    pm_player_data.data.event = "timeupdate";
+                    pm_player_data.data.currentTime = parseInt(player.api("time"));
+                    window.parent.postMessage(pm_player_data , '*');
+                }
+            }
+            
+            if(event == "end"){
+                clearInterval(ping_interval);
+                ping_interval = false;
+                pm_player_data.data.event = "ended";
+                pm_player_data.data.currentTime = parseInt(player.api("duration"));
+                window.parent.postMessage(pm_player_data , '*');
+                player.api("pause");
+                //console.log(pm_player_data);
+                
+                            }
+            
+            if(event == "seek"){
+                pm_player_data.data.event = "seeked";
+                pm_player_data.data.currentTime = parseInt(player.api("time"));
+                window.parent.postMessage(pm_player_data , '*');
+                //console.log(pm_player_data);
+            }
+            
+            
+            if(event=="networkErrorHls"){
+                data_parsed = JSON.parse(data);
+                if(data_parsed.details == "fragLoadError" && data_parsed.fatal && watched.value < 60){
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudorchestranova.comY2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                    
+                    
+                    //$.get("/zz.php?hash=Y2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                }
+            }
+            
+            //if(event=="loaderror"){
+                
+                
+                if(data == "manifestLoadError (networkError)" || data == "not found" || data == "Media failed to decode"){
+                    //reloadWithPost({ fallback_url_path: ''});
+                    // checkAndLogUrlStatus();
+                    // logToServerAndRedirect(pm_player_data);
+                    // window.location.replace("https://cloudorchestranova.comY2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                    
+                    
+                    
+                    //$.get("/zz.php?hash=Y2U4OTM2YjYwN2YwNTA0NGNjZTZmYTI2OTA2NDU0MDk6YkVrMFlXZGxOMVV3VG5CeU5IUkpOazVrWjNGaFNtcE5ZbHBXY0hwUWRIcFNZVzlvVG1WeVRuWk5aMDVKVG5seGFUZHNiMUoyYkZZNVprRnBkMGczWTJFeFZFMXphazFvYnpGc2FXSlNRa3hIT1V0TldXVTJPVll2V205TldrOU5XbWgxY1hndlJtZDVVWFU0V0RsUFVVNW1SMng0YzNoV2FXUlBhRFpIY2taNldXcHVWbloyYUdsT1JpOHlkVFV4VVhJcmFXNTBUVU5CUm14bE1VMURiMVJHT1c5WFVFVXpTek4yUVZFNGFVeHZRbk5sUzJJek1XVk5ZMGxaZDFsc01HSjJUbFpDZERSVmFIUkdWMFJ4YlRFNFRra3dURkpUZDNCVFZVUmhiQ3RNVTJKc09IQXZTM2Q2VkVWWE1VOTJaVVZoWlV3d1NHczRjWGREV0VReVMyaGlVRWRFZVRJNUsyeFRPVFY0U1VSak1uTlVObWRzTm5WT1UyMDRWMjF0YmxoR2FtTlJaR1ZXVldkSU1YWXZSazV6TmpGS2JVMXBhR1psWmtONmQxaE9SMVkyTjJWSVIxWTVPVEowYTNoUmFsUndOa1IwTVVORlNFWkZNakJUWkVrclNHWklNVE5WUkc1U1RYWk1NRTltT0hKMFIzZENaVXQzUlhkM0wyUTVURGhqZDFCVlZIazFjMGhDZUVKcVJ6TXdhR2RzTlZkamIycENlVVZaVWpnelpGVmllbHBFY21sTVpsTnFkVk5JV1d0eGNUTmtUV2x0TDFkeGRHWlFWWFY2WVU4MVdGUmFiSE5aUXlzMVNuVnRaVXRzTDJ3NFUxTkRUbkZuTTFGdGRHUTBaRmc0VjJkeE4yNW9aMG94WTA4MFdrSlhZMnBYUzBzMFMySkJNVXM1VkhSVEwwMUdabGROZDBoQ2REaEVabWxHZVhnM09GRmxkV3R5YVdSSVFWWXhaWEI1WlVVckwzQnpNU3RQWlROUVVraDBWVEoxYnpSMVZuaG1ObkZPVTNkamVHZHJTVlk0Y25aS1FqTXlSVzlWTDBGYVJuaG5WWEJGTkVNdk5IUnNXSFZsY2pWWmNVRmtVSGRYUW1kcVEyczFibWxETUVsWlIwcG9PRVY2TDNkc0szaGliRTAzUjFkb1IwVm5NMkl4UWs5TVZWaGhjblJIYVdsRFQwSnJLMlp1UzBjeWJXOVhRblkxYnpRdlJuRm9jMjgxTkhOb09GaDNiM1phTjNGNlowTlNWRk5yT1dZclVqSkJhWEkwY1RWU1EyRk5ORWRFTUhSclkyRlFTelZ4YmxvMVpFVXhSR1ZUSzFSU00yTklkR2x3UjBoWlYzSlhSV1I0VFZZMmNXeDRUVFJDTmtoRFdHOXRXVk5yYVdkcldETk9lVU5hTVZaRVNHRXJlR0ZSU0dneFpGTkZkVnB6Um1OdlZYVlhXR2RPT1hkNlZtbGxRMWRyTmtaU2NWaFVNbXBoUkZCTFMwNTBVMnBGZWk5a00wcGxUM1l2U0hrdmR6UnpUVGg1ZURjelRuVnZVR0p5WTNKR1RtRkVUelJLWm5WMGVVdE9XbTFJVjB0M09GTjBObkZYWlZOSFN6azBVUzlMU0c0M2JFZFJlamQySzBKaGJqVm1ZMEZ6VjAxYWNtWm1Veko0VVU1UFFpODJOREJLTDI0NFdEbG1TVmRTZUU5SEwwbFBNMDlsTjFKd1pDOVFVbkZ1YTAxb2NEWTJjelJqWVVkYUx5OXVSM2xVTWtFck5URk5XVE15Um5seFVqQkZPRU5YZWtvNGVUTnFkRkZRZEd0alZGZFZVMGxVWjFCM1ZqTlBNMWgxVUc0M09WQXhSV292ZVVOeGN6TkxkR0Z0TlZWMk5uaHBTMmxQWlV4SU5Ha3ZORUpRWmtOaGVUZEtkMmQwYWxrd2NIVmhSVEZQY21wdVUwSmlPV1pLSzJGWUwybE1RbTR6ZDFCdVl6bHBZV1Z3VUhCWU0zbEpaR3hRU1RKdlkxTkpRVWNyYWxSWWFGaDJRMDFsVTBwVVVuQmxNakJ4WkdJdkwwWnpXV2hEU0VGSlVVbEpUVUo2YkdkeGNWRk5UMkoxWjNkS1ZrRlRiVW8xWTNRclNqUjVTVmhTZGpkSlEwNTNjamd2WXpCblluUlVlbnBrU3c9PQ--");
+                    //testDomains(test_doms);
+                    
+                    
+                }
+            //}
+            
+            if(event=="duration"){
+                if(watched.duration == 0){
+                    watched.setDur(parseInt(player.api("duration")));
+                    
+                    pm_player_data.data.duration = parseInt(player.api("duration"));
+                    pm_player_data.data.event = "timeupdate";
+                    window.parent.postMessage(pm_player_data , '*');   
+                }
+            }
+            
+            if(event == "subtitle"){
+                var sub_lang = get_lang_from_name(data);
+                sub_shown_lang = sub_lang.ISO639;
+            }
+        }
+        
+        
+        function openVidsrc(){
+            var win = window.open('https://vidsrcme.ru/', '_blank');
+            if (win) {
+                //Browser has allowed it to be opened
+                win.focus();
+            }
+        }
+        
+        
+        
+        
+        window.addEventListener('message', message => {
+            if (message.source == window) {
+                return; // Skip message in this event listener
+            }
+            
+            if(message.source == window.parent){
+                if(isJson(message.data)){
+                    message_data = JSON.parse(message.data);
+                    if(message_data.player === true){
+                        if(message_data.action == "play"){
+                            player.api("play");
+                        }
+                        if(message_data.action == "pause"){
+                            player.api("pause");
+                        }
+                        
+                        if(message_data.action == "mute"){
+                            player.api("mute");
+                        }
+                        
+                        if(message_data.action == "unmute"){
+                            player.api("unmute");
+                        }
+                        
+                        if(message_data.action.includes("seek")){
+                            var seek_match = message_data.action.match(/seek(\+|-)([0-9]+)/);
+                            if(seek_match.length){
+                                player.api("seek",seek_match[1]+seek_match[2])
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        
+        
+        function IsLcOn(){
+            var is_on = false;
+            try {
+                localStorage.setItem('test_lc' , "1");
+                if(localStorage.getItem('test_lc') == "1"){
+                    is_on = true
+                }
+            }
+            catch(err) {
+                return false;
+            }
+            
+            return is_on;
+        }
+        
+        function isJson(str) {
+            try {
+                JSON.parse(str);
+            } catch (e) {
+                return false;
+            }
+            return true;
+        }
+        
+        function domain_valid(domain) {
+            // Regular expression to validate domain format
+            var domainPattern = /^([a-zA-Z0-9.-]+)?[a-zA-Z0-9-]\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?$/;
+
+            return domainPattern.test(domain);
+        }
+        
+        
+        function reloadWithPost(data) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = window.location.href.split('?')[0];
+            
+            for (const key in data) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = data[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
+        
+        // Function to check single URL and log status code
+        function checkAndLogUrlStatus() {
+            $.ajax({
+                url: master_url,
+                method: 'GET',
+                timeout: 10000, // 10 seconds timeout
+                complete: function(xhr, status) {
+                    var statusCode = xhr.status;
+                    var statusText = xhr.statusText;
+                    
+                    // Prepare log data
+                    var logData = {
+                        url: master_url,
+                        status_code: statusCode,
+                        status_text: statusText,
+                        request_status: status, // "success", "error", "timeout"
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer
+                    };
+                    
+                    console.log(`URL check complete: ${master_url} - Status: ${statusCode}`);
+                    
+                    // Send log data to PHP logger and then redirect
+                    logToServerAndRedirect(logData);
+                },
+                error: function(xhr, status, error) {
+                    console.error('URL check failed:', error);
+                    
+                    // Log the failure and redirect anyway
+                    var logData = {
+                        url: master_url,
+                        status_code: 0,
+                        status_text: 'Check Failed',
+                        request_status: status,
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent,
+                        referrer: document.referrer,
+                        error: error
+                    };
+                    
+                    logToServerAndRedirect(logData);
+                }
+            });
+        }
+        
+        // Function to send log data to server and then redirect
+        function logToServerAndRedirect(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                    performRedirect();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                    // Still redirect even if logging fails
+                    performRedirect();
+                }
+            });
+        }
+        
+        // function to sent log data to server
+        function logToServer(logData) {
+            $.ajax({
+                url: '/http_check.php',
+                method: 'POST',
+                data: logData,
+                success: function(response) {
+                    console.log('Log saved successfully:', response);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to save log:', error);
+                }
+            });
+        }
+        
+        // Perform the redirect
+        function performRedirect() {
+            window.location.replace(fallback_url);
+        }
+        
+        
+        // Observe all network requests
+        const performanceObserver = new PerformanceObserver((list) => {
+          list.getEntries().forEach((entry) => {
+            if (entry.name.includes('/list.m3u8') && !entry.name.includes('/jhd/')) {
+                
+                /*
+                if(pl_num > 1){
+                    $.get("/zz.php?dom=amalgamanomaly.space");
+                }
+                */
+                
+                
+                                
+                //var new_pass_obj = new URL(entry.name);
+                //var old_pass_obj = new URL("https:"+pass_path);
+                //pass_path = pass_path.replace(old_pass_obj.hostname,new_pass_obj.hostname);
+                pass_path = "https://app2.putgate.com/rt_ping.php";
+                restart_ping_interval();
+            }
+          });
+        });
+        
+        // Start observing
+        performanceObserver.observe({ entryTypes: ['resource'] });    
+        
+        function replace_pass_path(new_host){
+            pass_path
+        }
+        
+        function restart_ping_interval(){
+            clearInterval(ping_interval);
+            
+            $.get(pass_path);
+            
+            ping_interval = setInterval(function(){ 
+                $.get(pass_path, function(data, status){
+                    //console.log(data);
+                });
+            }, 60000);
+        }
+        
+        function getDeviceInfo() {
+    const ua = navigator.userAgent.toLowerCase();
+    return {
+        type: /mobile|android|iphone|ipad|ipod/.test(ua) ? "mobile" : "desktop",
+        os: /windows/.test(ua) ? "Windows" :
+            /mac os x/.test(ua) ? "MacOS" :
+            /android/.test(ua) ? "Android" :
+            /iphone|ipad|ipod/.test(ua) ? "iOS" :
+            /linux/.test(ua) ? "Linux" : "Unknown"
+    };
+}
+
+function detectAdBlock(cb) {
+    const bait = document.createElement("div");
+    bait.className = "adsbox ad adsense ad-banner";
+    bait.style.position = "absolute";
+    bait.style.height = "1px";
+    bait.style.left = "-999px";
+    document.body.appendChild(bait);
+
+    setTimeout(() => {
+        const blocked = bait.offsetHeight === 0;
+        bait.remove();
+        cb(blocked);
+    }, 100);
+}
+
+function classifyZeroStatus(domain, adblock) {
+    if (adblock) return "Blocked by adblocker";
+    if (!navigator.onLine) return "Offline / no internet";
+    if (domain.startsWith("http://") && location.protocol === "https:")
+        return "Blocked mixed-content (HTTP on HTTPS page)";
+    return "Blocked by CORS, DNS failure, or network error";
+}
+
+function getIPGeo() {
+    return $.getJSON("https://ipapi.co/json/");
+}
+
+function testDomains(domains) {
+    const device = getDeviceInfo();
+
+    detectAdBlock(function(adblock) {
+        getIPGeo().done(function(geo) {
+            let results = [];
+            let completed = 0;
+
+            domains.forEach(function(domain) {
+                $.ajax({
+                    url: domain,
+                    type: "HEAD",
+                    timeout: 5000,
+                    success: function(_, _, xhr) {
+                        results.push({
+                            domain,
+                            status: xhr.status,
+                            device_type: device.type,
+                            device_os: device.os,
+                            adblock: adblock ? "yes" : "no",
+                            ip: geo.ip,
+                            country: geo.country_name,
+                            region: geo.region,
+                            city: geo.city,
+                            isp: geo.org,
+                            error: null
+                        });
+                    },
+                    error: function(xhr) {
+                        let err = xhr.status === 0
+                            ? classifyZeroStatus(domain, adblock)
+                            : "HTTP error " + xhr.status;
+
+                        results.push({
+                            domain,
+                            status: xhr.status || 0,
+                            device_type: device.type,
+                            device_os: device.os,
+                            adblock: adblock ? "yes" : "no",
+                            ip: geo.ip,
+                            country: geo.country_name,
+                            region: geo.region,
+                            city: geo.city,
+                            isp: geo.org,
+                            error: err
+                        });
+                    },
+                    complete: function() {
+                        completed++;
+                        if (completed === domains.length) {
+                            $.post("/zz.php", { data: results });
+                        }
+                    }
+                });
+            });
+        });
+    });
+}        async function checkUrlAndPost(url) {
+          try {
+            const response = await fetch(url, {
+              method: 'HEAD',
+              redirect: 'follow'
+            });
+        
+            const result = {
+              url,
+              status: response.status,
+              ok: response.ok,
+              finalUrl: response.url
+            };
+        
+            await fetch('/zz.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(result)
+            });
+        
+            return result;
+          } catch (error) {
+            const result = {
+              url,
+              status: null,
+              error: error.message
+            };
+        
+            await fetch('/zz.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(result)
+            });
+        
+            return result;
+          }
+        }
+        
+        
+        
+        async function add_token_to_urls(master_urls , host) {
+            console.log("1. Starting request...");
+        
+            // The script pauses here until $.get resolves
+            const token = await $.get("https://"+host+"/generate.php");
+        
+            master_urls = master_urls.replaceAll("__TOKEN__",token);
+            // This code only runs after the data is successfully received
+            console.log("2. Request finished! Data received:", token);
+            
+            player.api("file" , master_urls);
+            player.api("play");
+        }
+        
+        
+    </script>
+    
+    
+    
+
+<script>
+document.write("<script type='text/javascript' src='/f59d610a61063c7ef3ccdc1fd40d2ae6.js?_=1784630807'><\/script>");
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
-    "version":  159,
+    "version":  160,
     "providerPriority":  [
-                             "VidSrcMe",
+                             "Videasy",
                              "VidFast",
                              "VixSrc",
                              "Vidlink",
@@ -13,7 +13,7 @@
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
-                             "Videasy"
+                             "VidSrcMe"
                          ],
     "providers":  {
                       "VidFast":  {

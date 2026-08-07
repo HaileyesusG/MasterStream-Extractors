@@ -90,7 +90,7 @@
 
       // Servers ordered by quality/priority. cdn(Yoru) first for potential 4K.
       // vsrc(Neon) is new, listed before old servers.
-      var servers = ['cdn', 'm4uhd', 'vsrc', 'downloader2', 'hdmovie', 'lamovie', 'superflix'];
+      var servers = ['downloader2', 'cdn', 'vsrc', 'm4uhd', 'hdmovie', 'lamovie', 'superflix'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];

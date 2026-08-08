@@ -1,5 +1,5 @@
 {
-  "version": 163,
+  "version": 164,
   "providerPriority": [
     "CineJoy",
     "Videasy",
@@ -17,6 +17,15 @@
     "VidSrcMe"
   ],
   "providers": {
+    "CineJoy": {
+      "file": "extractors/CineJoyExtractor.js",
+      "hash": "7E8C219FEA50062E952107E49254F8EB",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
     "Videasy": {
       "file": "extractors/VideasyExtractor.js",
       "hash": "041B1A15EA692D3A0A369A99114663BA",

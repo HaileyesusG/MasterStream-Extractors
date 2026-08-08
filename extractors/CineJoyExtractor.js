@@ -121,13 +121,15 @@
           var challenge;
           try { challenge = JSON.parse(challengeRaw); } catch (e) { continue; }
           
-          if (!global.ScryptSolverBridge || !global.ScryptSolverBridge.available) {
+          var gObj = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : this));
+          var bridge = gObj.ScryptSolverBridge;
+          if (!bridge || !bridge.available) {
             console.warn(TAG + ' ScryptSolverBridge not ready');
             continue;
           }
           var solution;
           try {
-            solution = await global.ScryptSolverBridge.solve(challenge);
+            solution = await bridge.solve(challenge);
           } catch (e) {
             console.warn(TAG + ' PoW solve failed: ' + e.message);
             continue;

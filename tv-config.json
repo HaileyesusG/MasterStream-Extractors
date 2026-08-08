@@ -1,6 +1,7 @@
 {
-  "version": 124,
+  "version": 125,
   "providerPriority": [
+    "CineJoy",
     "Videasy",
     "VidFast",
     "VixSrc",

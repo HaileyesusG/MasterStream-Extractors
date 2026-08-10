@@ -1,8 +1,8 @@
 {
-  "version": 171,
+  "version": 172,
   "providerPriority": [
-    "Videasy",
     "CineJoy",
+    "Videasy",
     "VidFast",
     "VixSrc",
     "Vidlink",

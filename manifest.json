@@ -1,11 +1,11 @@
 {
-    "version":  177,
+    "version":  178,
     "providerPriority":  [
                              "CineJoy",
+                             "VidVault",
                              "VaPlayer",
                              "Videasy",
                              "VidFast",
-                             "Vidlink",
                              "VixSrc",
                              "OzTv",
                              "VidSrc",
@@ -15,7 +15,7 @@
                              "VidlinkSniffer",
                              "VidApi",
                              "VidSrcMe",
-                             "VidVault"
+                             "Vidlink"
                          ],
     "providers":  {
                       "VidVault":  {

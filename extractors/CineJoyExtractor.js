@@ -54,10 +54,14 @@
               typeof window !== 'undefined' ? window :
               typeof global !== 'undefined' ? global : this;
 
-      var sniffer = (g && g.StreamSniffer) ||
-                    (g && g.NativeModules && g.NativeModules.StreamSniffer);
+      var sniffer = (typeof StreamSniffer !== 'undefined' && StreamSniffer) ||
+                    (g && g.StreamSniffer) ||
+                    (typeof NativeModules !== 'undefined' && NativeModules && NativeModules.StreamSniffer) ||
+                    (g && g.NativeModules && g.NativeModules.StreamSniffer) ||
+                    (g && g.nativeModuleProxy && g.nativeModuleProxy.StreamSniffer);
 
       if (!sniffer || typeof sniffer.sniffStreamUrl !== 'function') {
+        console.warn(TAG, 'StreamSniffer bridge not available in this runtime');
         return null;
       }
 

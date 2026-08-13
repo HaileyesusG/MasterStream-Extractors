@@ -1,5 +1,5 @@
 {
-    "version":  188,
+    "version":  189,
     "providerPriority":  [
                              "Videasy",
                              "VaPlayer",
@@ -15,7 +15,8 @@
                              "VidlinkSniffer",
                              "VidApi",
                              "VidSrcMe",
-                             "Vidlink"
+                             "Vidlink",
+                             "VidVault"
                          ],
     "providers":  {
                       "VidVault":  {

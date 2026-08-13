@@ -1,9 +1,9 @@
 {
-    "version":  182,
+    "version":  183,
     "providerPriority":  [
-                             "VaPlayer",
+                             "Videasy ",
                              "VidVault",
-                             "Videasy",
+                             "VaPlayer",
                              "CineJoy",
                              "VidFast",
                              "VixSrc",

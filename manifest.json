@@ -1,10 +1,10 @@
 {
-    "version":  179,
+    "version":  180,
     "providerPriority":  [
                              "CineJoy",
+                             "Videasy",
                              "VidVault",
                              "VaPlayer",
-                             "Videasy",
                              "VidFast",
                              "VixSrc",
                              "OzTv",

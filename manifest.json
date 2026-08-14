@@ -1,5 +1,5 @@
 {
-  "version": 208,
+  "version": 209,
   "providerPriority": [
     "Videasy",
     "CineJoy",
@@ -20,7 +20,7 @@
   "providers": {
     "CineJoy": {
       "file": "extractors/CineJoyExtractor.js",
-      "hash": "FD1F28831C17204DFB259F93A3465DB9",
+      "hash": "B893320795A8633381AF93A8E431706F",
       "webBaseUrl": "https://cinejoy.to/",
       "nativeMode": false,
       "mediaTypes": [

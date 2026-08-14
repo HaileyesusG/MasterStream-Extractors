@@ -742,89 +742,25 @@
       : (typeof global !== 'undefined') ? global
       : (typeof window !== 'undefined') ? window : {};
 
-    // Install persistent environment shims
-    if (!g.crypto || !g.crypto.subtle) g.crypto = polyCrypto;
-    if (typeof window !== 'undefined' && (!window.crypto || !window.crypto.subtle)) window.crypto = polyCrypto;
 
-    var SHIMS = {
-      HTMLElement: function HTMLElement() {},
-      SVGElement: function SVGElement() {},
-      Element: function Element() {},
-      Node: function Node() {},
-      EventTarget: function EventTarget() {},
-      Event: function Event(t) { this.type = t; this.bubbles = false; this.cancelable = false; },
-      CustomEvent: function CustomEvent(t, d) { this.type = t; this.detail = d && d.detail; },
-      MutationObserver: function MutationObserver() { this.observe = noop; this.disconnect = noop; this.takeRecords = function () { return []; }; },
-      ResizeObserver: function ResizeObserver() { this.observe = noop; this.disconnect = noop; },
-      IntersectionObserver: function IntersectionObserver() { this.observe = noop; this.disconnect = noop; },
-      AbortController: function AbortController() { this.signal = { aborted: false, addEventListener: noop, removeEventListener: noop }; this.abort = noop; },
-      AbortSignal: { timeout: function () { return { aborted: false, addEventListener: noop, removeEventListener: noop }; } },
-      customElements: { define: noop, get: function () { return null; }, whenDefined: function () { return Promise.resolve(); } },
-      document: {
-        querySelector: function () { return null; },
-        querySelectorAll: function () { return { forEach: noop, length: 0 }; },
-        getElementById: function () { return null; },
-        createElement: function (t) { return { tagName: t.toUpperCase(), style: {}, classList: { add: noop, remove: noop, contains: function () { return false; }, toggle: noop }, setAttribute: noop, getAttribute: function () { return null; }, addEventListener: noop, removeEventListener: noop, appendChild: noop, removeChild: noop, children: [], innerHTML: '', textContent: '' }; },
-        createTextNode: function (t) { return { textContent: t }; },
-        head: { appendChild: noop },
-        body: { appendChild: noop, style: {} },
-        cookie: '',
-        currentScript: null,
-        addEventListener: noop,
-        removeEventListener: noop,
-        dispatchEvent: noop,
-        readyState: 'complete',
-        hidden: false,
-      },
-      window: {
-        location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
-        navigator: { userAgent: USER_AGENT, language: fp.lang, hardwareConcurrency: fp.hc, maxTouchPoints: fp.tp, onLine: true },
-        addEventListener: noop, removeEventListener: noop, dispatchEvent: noop,
-        history: { pushState: noop, replaceState: noop, state: null },
-        screen: { width: fp.sw, height: fp.sh, colorDepth: fp.cd },
-        devicePixelRatio: fp.dpr,
-        crypto: polyCrypto,
-        performance: { now: function () { return Date.now(); }, mark: noop, measure: noop },
-        requestAnimationFrame: noop, cancelAnimationFrame: noop,
-        setTimeout: typeof setTimeout !== 'undefined' ? setTimeout : noop,
-        clearTimeout: typeof clearTimeout !== 'undefined' ? clearTimeout : noop,
-        setInterval: typeof setInterval !== 'undefined' ? setInterval : noop,
-        clearInterval: typeof clearInterval !== 'undefined' ? clearInterval : noop,
-      },
-      location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
-      history: { pushState: noop, replaceState: noop, state: null },
-      performance: { now: function () { return Date.now(); }, mark: noop, measure: noop },
-      requestAnimationFrame: noop,
-      cancelAnimationFrame: noop,
-      structuredClone: function (x) { return JSON.parse(JSON.stringify(x)); },
-      atob: pureAtob,
-      btoa: pureBtoa,
-      crypto: polyCrypto,
-    };
+    // Install polyfill on real global (belt-and-suspenders)
+    try { if (!g.crypto || !g.crypto.subtle) g.crypto = polyCrypto; } catch (e) {}
 
-    Object.keys(SHIMS).forEach(function (k) {
-      if (typeof g[k] === 'undefined' || g[k] === null) {
-        try { g[k] = SHIMS[k]; } catch (e) {}
-      }
-    });
 
-    // Build a fetch shim that uses XMLHttpRequest (available in React Native / Hermes)
-    // or falls back to global fetch if present.
+    // ── fetch shim: global fetch (with injected headers) or XHR fallback ─────
     var fetchShim = (function () {
-      // If a real fetch exists, use it with added headers
       if (typeof fetch !== 'undefined') {
         return function (url, opts) {
-          var mergedOpts = Object.assign({}, opts);
-          mergedOpts.headers = Object.assign({
+          var o = Object.assign({}, opts);
+          o.headers = Object.assign({
             'Accept': '*/*',
             'Origin': 'https://cinejoy.to',
             'Referer': 'https://cinejoy.to/',
             'User-Agent': USER_AGENT,
           }, (opts && opts.headers) || {});
-          return fetch(url, mergedOpts);
+          return fetch(url, o);
         };
       }
-      // XMLHttpRequest fallback (React Native)
       return function (url, opts) {
         return new Promise(function (resolve, reject) {
           var xhr = new XMLHttpRequest();
@@ -840,27 +776,20 @@
           xhr.onload = function () {
             var ab = xhr.response;
             var ok = xhr.status >= 200 && xhr.status < 300;
+            var toText = function () {
+              return typeof TextDecoder !== 'undefined'
+                ? new TextDecoder().decode(ab)
+                : String.fromCharCode.apply(null, new Uint8Array(ab));
+            };
             resolve({
-              ok: ok,
-              status: xhr.status,
-              json: function () {
-                var text = typeof TextDecoder !== 'undefined'
-                  ? new TextDecoder().decode(ab)
-                  : String.fromCharCode.apply(null, new Uint8Array(ab));
-                return Promise.resolve(JSON.parse(text));
-              },
-              text: function () {
-                var text = typeof TextDecoder !== 'undefined'
-                  ? new TextDecoder().decode(ab)
-                  : String.fromCharCode.apply(null, new Uint8Array(ab));
-                return Promise.resolve(text);
-              },
+              ok: ok, status: xhr.status,
+              json: function () { return Promise.resolve(JSON.parse(toText())); },
+              text: function () { return Promise.resolve(toText()); },
               arrayBuffer: function () { return Promise.resolve(ab); },
             });
           };
           xhr.onerror = function () { reject(new Error('XHR network error')); };
-          if (opts && opts.body) xhr.send(opts.body);
-          else xhr.send();
+          if (opts && opts.body) xhr.send(opts.body); else xhr.send();
         });
       };
     })();
@@ -871,63 +800,104 @@
         return res.text();
       })
       .then(function (code) {
+        // ── Fix 1: Import stripping ──────────────────────────────────────────────
+        // Old (BROKEN): replace entire import with 'var X = {}' — identifiers like
+        //   f, g, baz go undeclared → f.prototype crashes.
+        // New (CORRECT): extract every local identifier and declare each as a stub.
+        //   import{F as f, G}from"./x" → var f = {}; var G = {};
         var clean = code
-          .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
-          .replace(/export\{[^}]*\};?/g, '');
+          .replace(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*["'];?/g, function (_, imports) {
+            return imports.split(',').map(function (seg) {
+              var parts = seg.trim().split(/\s+as\s+/);
+              var localName = (parts[1] || parts[0]).trim().replace(/[^a-zA-Z0-9_$]/g, '');
+              return localName ? 'var ' + localName + ' = {};' : '';
+            }).filter(Boolean).join(' ');
+          })
+          .replace(/export\s*\{[^}]*\}\s*;?/g, '');
 
-        // ── Hermes fix: inject shim declarations into the function body ──────────
-        // When `new Function(code)` runs, free variable lookups go to the REAL
-        // Hermes global, not to `g` (which we pass via .call(g)).
-        // By prepending explicit `var Name = shimValue;` we ensure the bundle code
-        // resolves them from the function's own scope — always visible in Hermes.
+        // ── Fix 2: Shim variable declarations ────────────────────────────────────
+        // CRITICAL RULE: Never reference outer variable names inside the string.
+        // Reason: inside `new Function`, `var X` hoists to the function's own scope.
+        // So `var X = X` → RHS 'X' finds the hoisted (undefined) local var, not global.
+        // ALL values here must be SELF-CONTAINED inline expressions only.
+        //
+        // Values that can't be serialized to a string (polyCrypto, pureAtob, etc.)
+        // are passed as named PARAMETERS to new Function — parameter bindings are
+        // not affected by var hoisting of the body.
+        var UA = JSON.stringify(USER_AGENT);
         var shimDecls = [
-          'var HTMLElement = ' + (typeof HTMLElement !== 'undefined' ? 'HTMLElement' : 'function HTMLElement(){}') + ';',
-          'var SVGElement = ' + (typeof SVGElement !== 'undefined' ? 'SVGElement' : 'function SVGElement(){}') + ';',
-          'var Element = ' + (typeof Element !== 'undefined' ? 'Element' : 'function Element(){}') + ';',
-          'var Node = ' + (typeof Node !== 'undefined' ? 'Node' : 'function Node(){}') + ';',
-          'var EventTarget = ' + (typeof EventTarget !== 'undefined' ? 'EventTarget' : 'function EventTarget(){}') + ';',
-          'var Event = ' + (typeof Event !== 'undefined' ? 'Event' : 'function Event(t){this.type=t;}') + ';',
-          'var CustomEvent = ' + (typeof CustomEvent !== 'undefined' ? 'CustomEvent' : 'function CustomEvent(t,d){this.type=t;this.detail=d&&d.detail;}') + ';',
-          'var MutationObserver = function MutationObserver(){this.observe=function(){};this.disconnect=function(){};this.takeRecords=function(){return[];};};',
-          'var ResizeObserver = function ResizeObserver(){this.observe=function(){};this.disconnect=function(){};};',
-          'var IntersectionObserver = function IntersectionObserver(){this.observe=function(){};this.disconnect=function(){};};',
-          'var AbortController = function AbortController(){var noop=function(){};this.signal={aborted:false,addEventListener:noop,removeEventListener:noop};this.abort=noop;};',
+          // DOM stubs — always inline, self-contained
+          'var HTMLElement    = function HTMLElement(){};',
+          'var SVGElement     = function SVGElement(){};',
+          'var Element        = function Element(){};',
+          'var Node           = function Node(){};',
+          'var EventTarget    = function EventTarget(){};',
+          'var Event          = function Event(t,i){this.type=t;this.bubbles=!!(i&&i.bubbles);this.cancelable=!!(i&&i.cancelable);};',
+          'var CustomEvent    = function CustomEvent(t,i){this.type=t;this.detail=i&&i.detail;};',
+          'var MutationObserver     = function MutationObserver(cb){this.observe=function(){};this.disconnect=function(){};this.takeRecords=function(){return[];};};',
+          'var ResizeObserver       = function ResizeObserver(cb){this.observe=function(){};this.disconnect=function(){};};',
+          'var IntersectionObserver = function IntersectionObserver(cb){this.observe=function(){};this.disconnect=function(){};};',
+          'var AbortController = function AbortController(){var n=function(){};this.signal={aborted:false,addEventListener:n,removeEventListener:n};this.abort=n;};',
           'var AbortSignal = {timeout:function(){return{aborted:false,addEventListener:function(){},removeEventListener:function(){}};} };',
           'var customElements = {define:function(){},get:function(){return null;},whenDefined:function(){return Promise.resolve();}};',
-          'var crypto = (__pureSubtle_crypto__);',
-          'var atob = (__pureAtob__);',
-          'var btoa = (__pureBtoa__);',
-          'var fetch = (__fetchShim__);',
+          // Utilities — self-contained or passed as params
           'var structuredClone = function(x){return JSON.parse(JSON.stringify(x));};',
-          'var performance = {now:function(){return Date.now();},mark:function(){},measure:function(){}};',
+          'var performance     = {now:function(){return Date.now();},mark:function(){},measure:function(){}};',
           'var requestAnimationFrame = function(){};',
-          'var cancelAnimationFrame = function(){};',
-          'var location = {href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"};',
-          'var history = {pushState:function(){},replaceState:function(){},state:null};',
-          'var navigator = {userAgent:' + JSON.stringify(USER_AGENT) + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true};',
-          'var document = {querySelector:function(){return null;},querySelectorAll:function(){return{forEach:function(){},length:0};},getElementById:function(){return null;},createElement:function(t){var noop=function(){};return{tagName:t.toUpperCase(),style:{},classList:{add:noop,remove:noop,contains:function(){return false;},toggle:noop},setAttribute:noop,getAttribute:function(){return null;},addEventListener:noop,removeEventListener:noop,appendChild:noop,removeChild:noop,children:[],innerHTML:"",textContent:""};},createTextNode:function(t){return{textContent:t};},head:{appendChild:function(){}},body:{appendChild:function(){},style:{}},cookie:"",currentScript:null,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){},readyState:"complete",hidden:false};',
-          'var window = {location:{href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"},navigator:navigator,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){},history:history,screen:{width:390,height:844,colorDepth:24},devicePixelRatio:2,crypto:(__pureSubtle_crypto__),performance:performance,requestAnimationFrame:function(){},cancelAnimationFrame:function(){},setTimeout:setTimeout,clearTimeout:clearTimeout,setInterval:setInterval,clearInterval:clearInterval};',
-          'var self = window;',
+          'var cancelAnimationFrame  = function(){};',
+          // Passed as named params → safe (not affected by hoisting)
+          'var crypto = __cj_crypto__;',
+          'var atob   = __cj_atob__;',
+          'var btoa   = __cj_btoa__;',
+          'var fetch  = __cj_fetch__;',
+          // Objects that reference other shim vars must be fully self-contained
+          'var navigator = {userAgent:' + UA + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true};',
+          'var location  = {href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"};',
+          'var history   = {pushState:function(){},replaceState:function(){},state:null};',
+          // document — self-contained
+          'var document = (function(){'
+          + 'var n=function(){};'
+          + 'var mkEl=function(t){return{tagName:t.toUpperCase(),style:{},classList:{add:n,remove:n,contains:function(){return false;},toggle:n},setAttribute:n,getAttribute:function(){return null;},addEventListener:n,removeEventListener:n,appendChild:n,removeChild:n,children:[],innerHTML:"",textContent:""};};'
+          + 'return{querySelector:function(){return null;},querySelectorAll:function(){return{forEach:n,length:0};},getElementById:function(){return null;},createElement:mkEl,createTextNode:function(t){return{textContent:t};},head:{appendChild:n},body:{appendChild:n,style:{}},cookie:"",currentScript:null,addEventListener:n,removeEventListener:n,dispatchEvent:n,readyState:"complete",hidden:false};'
+          + '})();',
+          // window — all values MUST be self-contained (no var-name refs!)
+          'var window = (function(){'
+          + 'var n=function(){};'
+          + 'return{'
+          + 'location:{href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"},'
+          + 'navigator:{userAgent:' + UA + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true},'
+          + 'history:{pushState:n,replaceState:n,state:null},'
+          + 'screen:{width:390,height:844,colorDepth:24},'
+          + 'devicePixelRatio:2,'
+          + 'performance:{now:function(){return Date.now();},mark:n,measure:n},'
+          + 'crypto:__cj_crypto__,'    // param — no hoisting issue
+          + 'addEventListener:n,removeEventListener:n,dispatchEvent:n,'
+          + 'requestAnimationFrame:n,cancelAnimationFrame:n,'
+          + 'setTimeout:setTimeout,clearTimeout:clearTimeout,'
+          + 'setInterval:setInterval,clearInterval:clearInterval'
+          + '};'
+          + '})();',
+          'var self       = window;',
           'var globalThis = window;',
         ].join('\n');
 
-        // We pass the shim references as named args to new Function so they can
-        // be injected as identifiers without eval-of-values.
         var fnBody = shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
 
+        // Named params: __cj_crypto__ etc. are bound in the function's PARAMETER scope,
+        // which is outer to the function body — var hoisting in the body cannot shadow them.
         var fn = new Function(
-          '__pureSubtle_crypto__',
-          '__pureAtob__',
-          '__pureBtoa__',
-          '__fetchShim__',
+          '__cj_crypto__',
+          '__cj_atob__',
+          '__cj_btoa__',
+          '__cj_fetch__',
           fnBody
         );
 
         var Ax;
         try {
-          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim);
+          Ax = fn(polyCrypto, pureAtob, pureBtoa, fetchShim);
         } catch (evalErr) {
-          console.warn(TAG + ' loadBoqEval new Function failed: ' + evalErr.message);
+          console.warn(TAG + ' BOq eval error: ' + evalErr.message);
           throw evalErr;
         }
         if (!Ax && typeof g.Ax !== 'undefined') Ax = g.Ax;

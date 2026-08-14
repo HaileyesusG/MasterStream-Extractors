@@ -101,7 +101,7 @@
           try {
             var code = Buffer.concat(chunks).toString();
             var clean = code
-              .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, '')
+              .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
               .replace(/export\{[^}]*\};?/g, '');
 
             var nativeAtob = function (s) { return Buffer.from(s, 'base64').toString('binary'); };
@@ -241,22 +241,26 @@
     var toRestore = [];
     for (var k in SHIMS) {
       if (Object.prototype.hasOwnProperty.call(SHIMS, k)) {
-        _saved[k] = g[k];
-        if (typeof g[k] === 'undefined') {
-          g[k] = SHIMS[k];
-          toRestore.push(k);
-        }
+        try {
+          _saved[k] = g[k];
+          if (typeof g[k] === 'undefined') {
+            g[k] = SHIMS[k];
+            toRestore.push(k);
+          }
+        } catch (e) {}
       }
     }
 
     function cleanup() {
       for (var i = 0; i < toRestore.length; i++) {
         var key = toRestore[i];
-        if (typeof _saved[key] === 'undefined') {
-          try { delete g[key]; } catch (e) { g[key] = undefined; }
-        } else {
-          g[key] = _saved[key];
-        }
+        try {
+          if (typeof _saved[key] === 'undefined') {
+            delete g[key];
+          } else {
+            g[key] = _saved[key];
+          }
+        } catch (e) {}
       }
     }
 
@@ -264,7 +268,7 @@
       .then(function (r) { return r.text(); })
       .then(function (code) {
         var clean = code
-          .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, '')
+          .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
           .replace(/export\{[^}]*\};?/g, '');
 
         var exps = {};
@@ -493,10 +497,12 @@
           return fetchSubtitles(tmdbId, isTv, season, episode).then(function (subs) {
             var rawSubs = (result.captions || []).concat(subs || []);
             var formattedSubs = rawSubs.map(function (s) {
+              var lang = s.language || s.lang || s.label || 'Unknown';
               return {
                 url: s.url,
-                lang: s.language || s.lang || s.label || 'Unknown',
-                label: s.label || s.language || s.lang || 'Unknown',
+                lang: lang,
+                language: lang,
+                label: s.label || lang,
                 type: s.type || 'srt',
               };
             });

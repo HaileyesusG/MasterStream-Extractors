@@ -1,5 +1,5 @@
 {
-    "version":  194,
+    "version":  195,
     "providerPriority":  [
                              "Videasy",
                              "VaPlayer",
@@ -21,7 +21,7 @@
     "providers":  {
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "EFFE702DC2EB3B4CCBC1D54674AF5D40",
+                                       "hash":  "EFFE702D157DA7011EE00DE14DE5E66A",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -30,7 +30,7 @@
                                    },
                       "CineJoy":  {
                                       "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "694A2CC4B0345AA6EC6675668DC88736",
+                                      "hash":  "EA4BE0A67B8183CCC87CFE2ED674D51C",
                                       "webBaseUrl":  "https://cinejoy.to/",
                                       "nativeMode":  false,
                                       "mediaTypes":  [

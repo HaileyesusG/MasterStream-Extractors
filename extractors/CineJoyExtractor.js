@@ -808,7 +808,64 @@
       }
     });
 
-    return fetch(BOQ_URL, { headers: { 'User-Agent': USER_AGENT } })
+    // Build a fetch shim that uses XMLHttpRequest (available in React Native / Hermes)
+    // or falls back to global fetch if present.
+    var fetchShim = (function () {
+      // If a real fetch exists, use it with added headers
+      if (typeof fetch !== 'undefined') {
+        return function (url, opts) {
+          var mergedOpts = Object.assign({}, opts);
+          mergedOpts.headers = Object.assign({
+            'Accept': '*/*',
+            'Origin': 'https://cinejoy.to',
+            'Referer': 'https://cinejoy.to/',
+            'User-Agent': USER_AGENT,
+          }, (opts && opts.headers) || {});
+          return fetch(url, mergedOpts);
+        };
+      }
+      // XMLHttpRequest fallback (React Native)
+      return function (url, opts) {
+        return new Promise(function (resolve, reject) {
+          var xhr = new XMLHttpRequest();
+          xhr.open((opts && opts.method) || 'GET', url, true);
+          var hdrs = Object.assign({
+            'Accept': '*/*',
+            'Origin': 'https://cinejoy.to',
+            'Referer': 'https://cinejoy.to/',
+            'User-Agent': USER_AGENT,
+          }, (opts && opts.headers) || {});
+          Object.keys(hdrs).forEach(function (k) { try { xhr.setRequestHeader(k, hdrs[k]); } catch (e) {} });
+          xhr.responseType = 'arraybuffer';
+          xhr.onload = function () {
+            var ab = xhr.response;
+            var ok = xhr.status >= 200 && xhr.status < 300;
+            resolve({
+              ok: ok,
+              status: xhr.status,
+              json: function () {
+                var text = typeof TextDecoder !== 'undefined'
+                  ? new TextDecoder().decode(ab)
+                  : String.fromCharCode.apply(null, new Uint8Array(ab));
+                return Promise.resolve(JSON.parse(text));
+              },
+              text: function () {
+                var text = typeof TextDecoder !== 'undefined'
+                  ? new TextDecoder().decode(ab)
+                  : String.fromCharCode.apply(null, new Uint8Array(ab));
+                return Promise.resolve(text);
+              },
+              arrayBuffer: function () { return Promise.resolve(ab); },
+            });
+          };
+          xhr.onerror = function () { reject(new Error('XHR network error')); };
+          if (opts && opts.body) xhr.send(opts.body);
+          else xhr.send();
+        });
+      };
+    })();
+
+    return fetchShim(BOQ_URL, { headers: { 'User-Agent': USER_AGENT } })
       .then(function (res) {
         if (!res.ok) throw new Error('BOqDcafn download failed: HTTP ' + res.status);
         return res.text();
@@ -818,8 +875,61 @@
           .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
           .replace(/export\{[^}]*\};?/g, '');
 
-        var fn = new Function(clean + '; return typeof Ax !== "undefined" ? Ax : null;');
-        var Ax = fn.call(g);
+        // ── Hermes fix: inject shim declarations into the function body ──────────
+        // When `new Function(code)` runs, free variable lookups go to the REAL
+        // Hermes global, not to `g` (which we pass via .call(g)).
+        // By prepending explicit `var Name = shimValue;` we ensure the bundle code
+        // resolves them from the function's own scope — always visible in Hermes.
+        var shimDecls = [
+          'var HTMLElement = ' + (typeof HTMLElement !== 'undefined' ? 'HTMLElement' : 'function HTMLElement(){}') + ';',
+          'var SVGElement = ' + (typeof SVGElement !== 'undefined' ? 'SVGElement' : 'function SVGElement(){}') + ';',
+          'var Element = ' + (typeof Element !== 'undefined' ? 'Element' : 'function Element(){}') + ';',
+          'var Node = ' + (typeof Node !== 'undefined' ? 'Node' : 'function Node(){}') + ';',
+          'var EventTarget = ' + (typeof EventTarget !== 'undefined' ? 'EventTarget' : 'function EventTarget(){}') + ';',
+          'var Event = ' + (typeof Event !== 'undefined' ? 'Event' : 'function Event(t){this.type=t;}') + ';',
+          'var CustomEvent = ' + (typeof CustomEvent !== 'undefined' ? 'CustomEvent' : 'function CustomEvent(t,d){this.type=t;this.detail=d&&d.detail;}') + ';',
+          'var MutationObserver = function MutationObserver(){this.observe=function(){};this.disconnect=function(){};this.takeRecords=function(){return[];};};',
+          'var ResizeObserver = function ResizeObserver(){this.observe=function(){};this.disconnect=function(){};};',
+          'var IntersectionObserver = function IntersectionObserver(){this.observe=function(){};this.disconnect=function(){};};',
+          'var AbortController = function AbortController(){var noop=function(){};this.signal={aborted:false,addEventListener:noop,removeEventListener:noop};this.abort=noop;};',
+          'var AbortSignal = {timeout:function(){return{aborted:false,addEventListener:function(){},removeEventListener:function(){}};} };',
+          'var customElements = {define:function(){},get:function(){return null;},whenDefined:function(){return Promise.resolve();}};',
+          'var crypto = (__pureSubtle_crypto__);',
+          'var atob = (__pureAtob__);',
+          'var btoa = (__pureBtoa__);',
+          'var fetch = (__fetchShim__);',
+          'var structuredClone = function(x){return JSON.parse(JSON.stringify(x));};',
+          'var performance = {now:function(){return Date.now();},mark:function(){},measure:function(){}};',
+          'var requestAnimationFrame = function(){};',
+          'var cancelAnimationFrame = function(){};',
+          'var location = {href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"};',
+          'var history = {pushState:function(){},replaceState:function(){},state:null};',
+          'var navigator = {userAgent:' + JSON.stringify(USER_AGENT) + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true};',
+          'var document = {querySelector:function(){return null;},querySelectorAll:function(){return{forEach:function(){},length:0};},getElementById:function(){return null;},createElement:function(t){var noop=function(){};return{tagName:t.toUpperCase(),style:{},classList:{add:noop,remove:noop,contains:function(){return false;},toggle:noop},setAttribute:noop,getAttribute:function(){return null;},addEventListener:noop,removeEventListener:noop,appendChild:noop,removeChild:noop,children:[],innerHTML:"",textContent:""};},createTextNode:function(t){return{textContent:t};},head:{appendChild:function(){}},body:{appendChild:function(){},style:{}},cookie:"",currentScript:null,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){},readyState:"complete",hidden:false};',
+          'var window = {location:{href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"},navigator:navigator,addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){},history:history,screen:{width:390,height:844,colorDepth:24},devicePixelRatio:2,crypto:(__pureSubtle_crypto__),performance:performance,requestAnimationFrame:function(){},cancelAnimationFrame:function(){},setTimeout:setTimeout,clearTimeout:clearTimeout,setInterval:setInterval,clearInterval:clearInterval};',
+          'var self = window;',
+          'var globalThis = window;',
+        ].join('\n');
+
+        // We pass the shim references as named args to new Function so they can
+        // be injected as identifiers without eval-of-values.
+        var fnBody = shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
+
+        var fn = new Function(
+          '__pureSubtle_crypto__',
+          '__pureAtob__',
+          '__pureBtoa__',
+          '__fetchShim__',
+          fnBody
+        );
+
+        var Ax;
+        try {
+          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim);
+        } catch (evalErr) {
+          console.warn(TAG + ' loadBoqEval new Function failed: ' + evalErr.message);
+          throw evalErr;
+        }
         if (!Ax && typeof g.Ax !== 'undefined') Ax = g.Ax;
 
         return { Ax: Ax };

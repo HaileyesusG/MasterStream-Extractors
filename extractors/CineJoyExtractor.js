@@ -171,25 +171,94 @@
 
   function loadBoqEval() {
     var noop = function () {};
-    var fakeFetch = function () { return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.resolve({}); }, text: function () { return Promise.resolve(''); } }); };
     var fp = buildFingerprint();
 
-    // Provide ALL globals that BOqDcafn.js may reference as class base classes or constructors
-    var HTMLElementShim = function HTMLElement() {};
-    var EventShim = function Event(t) { this.type = t; };
-
-    // Gather real globals where available
+    // Get real crypto
     var realCrypto = (typeof crypto !== 'undefined' && crypto.subtle) ? crypto
       : (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) ? window.crypto
       : null;
-    var realAtob = typeof atob === 'function' ? atob : function (s) { return null; };
-    var realBtoa = typeof btoa === 'function' ? btoa : function (s) { return null; };
-    var realTextEncoder = typeof TextEncoder !== 'undefined' ? TextEncoder : null;
-    var realTextDecoder = typeof TextDecoder !== 'undefined' ? TextDecoder : null;
-    var realURL = typeof URL !== 'undefined' ? URL : null;
-    var realURLSearchParams = typeof URLSearchParams !== 'undefined' ? URLSearchParams : null;
-    var realPromise = Promise;
-    var realIntl = typeof Intl !== 'undefined' ? Intl : null;
+
+    // In Hermes, `class X extends Y {}` resolves Y from the TRUE global scope,
+    // NOT from new Function() parameters. We must inject shims onto globalThis.
+    var g = (typeof globalThis !== 'undefined') ? globalThis
+      : (typeof global !== 'undefined') ? global
+      : (typeof window !== 'undefined') ? window : {};
+
+    // Save originals so we can restore after eval
+    var _saved = {};
+    var SHIMS = {
+      HTMLElement: function HTMLElement() {},
+      SVGElement: function SVGElement() {},
+      Element: function Element() {},
+      Node: function Node() {},
+      EventTarget: function EventTarget() {},
+      Event: function Event(t) { this.type = t; this.bubbles = false; this.cancelable = false; },
+      CustomEvent: function CustomEvent(t, d) { this.type = t; this.detail = d && d.detail; },
+      MutationObserver: function MutationObserver() { this.observe = noop; this.disconnect = noop; this.takeRecords = function () { return []; }; },
+      ResizeObserver: function ResizeObserver() { this.observe = noop; this.disconnect = noop; },
+      IntersectionObserver: function IntersectionObserver() { this.observe = noop; this.disconnect = noop; },
+      AbortController: function AbortController() { this.signal = { aborted: false, addEventListener: noop, removeEventListener: noop }; this.abort = noop; },
+      AbortSignal: { timeout: function () { return { aborted: false, addEventListener: noop, removeEventListener: noop }; } },
+      customElements: { define: noop, get: function () { return null; }, whenDefined: function () { return Promise.resolve(); } },
+      document: {
+        querySelector: function () { return null; },
+        querySelectorAll: function () { return { forEach: noop, length: 0 }; },
+        getElementById: function () { return null; },
+        createElement: function (t) { return { tagName: t.toUpperCase(), style: {}, classList: { add: noop, remove: noop, contains: function () { return false; }, toggle: noop }, setAttribute: noop, getAttribute: function () { return null; }, addEventListener: noop, removeEventListener: noop, appendChild: noop, removeChild: noop, children: [], innerHTML: '', textContent: '' }; },
+        createTextNode: function (t) { return { textContent: t }; },
+        head: { appendChild: noop },
+        body: { appendChild: noop, style: {} },
+        cookie: '',
+        currentScript: null,
+        addEventListener: noop,
+        removeEventListener: noop,
+        dispatchEvent: noop,
+        readyState: 'complete',
+        hidden: false,
+      },
+      window: {
+        location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
+        navigator: { userAgent: 'Mozilla/5.0', language: fp.lang, hardwareConcurrency: fp.hc, maxTouchPoints: fp.tp, onLine: true },
+        addEventListener: noop, removeEventListener: noop, dispatchEvent: noop,
+        history: { pushState: noop, replaceState: noop, state: null },
+        screen: { width: fp.sw, height: fp.sh, colorDepth: fp.cd },
+        devicePixelRatio: fp.dpr,
+        crypto: realCrypto,
+        performance: { now: function () { return Date.now(); }, mark: noop, measure: noop },
+        requestAnimationFrame: noop, cancelAnimationFrame: noop,
+        setTimeout: noop, clearTimeout: noop, setInterval: noop, clearInterval: noop,
+      },
+      location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
+      history: { pushState: noop, replaceState: noop, state: null },
+      performance: { now: function () { return Date.now(); }, mark: noop, measure: noop },
+      requestAnimationFrame: noop,
+      cancelAnimationFrame: noop,
+      structuredClone: function (x) { return JSON.parse(JSON.stringify(x)); },
+      fetch: function () { return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.resolve({}); }, text: function () { return Promise.resolve(''); } }); },
+    };
+
+    // Only inject shims for globals that are missing
+    var toRestore = [];
+    for (var k in SHIMS) {
+      if (Object.prototype.hasOwnProperty.call(SHIMS, k)) {
+        _saved[k] = g[k];
+        if (typeof g[k] === 'undefined') {
+          g[k] = SHIMS[k];
+          toRestore.push(k);
+        }
+      }
+    }
+
+    function cleanup() {
+      for (var i = 0; i < toRestore.length; i++) {
+        var key = toRestore[i];
+        if (typeof _saved[key] === 'undefined') {
+          try { delete g[key]; } catch (e) { g[key] = undefined; }
+        } else {
+          g[key] = _saved[key];
+        }
+      }
+    }
 
     return fetch(BOQ_URL, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' } })
       .then(function (r) { return r.text(); })
@@ -199,50 +268,28 @@
           .replace(/export\{[^}]*\};?/g, '');
 
         var exps = {};
-        // eslint-disable-next-line no-new-func
-        var fn = new Function(
-          'exports', 'globalThis', 'self', 'window', 'document', 'navigator', 'location',
-          'history', 'performance', 'customElements', 'HTMLElement', 'Event',
-          'MutationObserver', 'AbortController', 'AbortSignal',
-          'crypto', 'atob', 'btoa', 'TextEncoder', 'TextDecoder',
-          'fetch', 'URL', 'URLSearchParams', 'Promise', 'Intl',
-          'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
-          'requestAnimationFrame', 'cancelAnimationFrame',
-          'addEventListener', 'removeEventListener', 'dispatchEvent', 'structuredClone',
-          '"use strict";\n' + clean + '\n' +
-          'exports.Sx=Sx;exports.Cx=Cx;exports.ux=ux;exports.mx=mx;exports.v0=v0;exports.V=V;'
-        );
-
-        var globalSelf = { crypto: realCrypto, atob: realAtob, btoa: realBtoa };
-
-        fn(
-          exps,
-          globalSelf, globalSelf,
-          { location: { href: 'https://cinejoy.to/' }, navigator: { userAgent: '' }, addEventListener: noop },
-          { querySelector: function () { return null; }, querySelectorAll: function () { return []; }, createElement: function () { return { style: {}, classList: { add: noop } }; }, cookie: '', currentScript: null, addEventListener: noop },
-          { userAgent: 'Mozilla/5.0', language: fp.lang, hardwareConcurrency: fp.hc, maxTouchPoints: fp.tp },
-          { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
-          { pushState: noop, replaceState: noop, state: null },
-          { now: function () { return Date.now(); }, mark: noop, measure: noop },
-          { define: noop, get: function () { return null; } },
-          HTMLElementShim, EventShim,
-          function () { this.observe = noop; this.disconnect = noop; }, // MutationObserver
-          function () { this.signal = { aborted: false, addEventListener: noop }; this.abort = noop; }, // AbortController
-          { timeout: function () { return { aborted: false, addEventListener: noop }; } }, // AbortSignal
-          realCrypto, realAtob, realBtoa, realTextEncoder, realTextDecoder,
-          fakeFetch, realURL, realURLSearchParams, realPromise, realIntl,
-          noop, noop, noop, noop, noop, noop, noop, noop,
-          function (x) { return JSON.parse(JSON.stringify(x)); }
-        );
+        try {
+          // eslint-disable-next-line no-new-func
+          var fn = new Function('module', 'exports',
+            clean + '\n' +
+            'exports.Sx=Sx;exports.Cx=Cx;exports.ux=ux;exports.mx=mx;exports.v0=v0;exports.V=V;'
+          );
+          var mod = { exports: exps };
+          fn(mod, exps);
+        } finally {
+          cleanup();
+        }
 
         var serverPub = exps.V(exps.v0);
+        var _Sx = exps.Sx, _Cx = exps.Cx, _ux = exps.ux, _mx = exps.mx;
         return {
-          Sx: function () { return exps.Sx(serverPub); },
-          Cx: function (sx, serverBytes) { return exps.Cx(sx, serverBytes); },
-          ux: function (session, seq, payload) { return exps.ux(session, seq, payload); },
-          mx: function (session, msg) { return exps.mx(session, msg); },
+          Sx: function () { return _Sx(serverPub); },
+          Cx: function (sx, serverBytes) { return _Cx(sx, serverBytes); },
+          ux: function (session, seq, payload) { return _ux(session, seq, payload); },
+          mx: function (session, msg) { return _mx(session, msg); },
         };
-      });
+      })
+      .catch(function (e) { cleanup(); throw e; });
   }
 
   function loadBoq() {
@@ -406,12 +453,37 @@
   }
 
   // ─── Main extract ─────────────────────────────────────────────────────────────
-  function extractAsync(params) {
-    var tmdbId = params.tmdbId || params.tmdb || params.id;
-    var isTv = params.isTv || params.type === 'tv' || params.type === 2;
+  function parseArgs(args) {
+    var first = args[0];
+    if (typeof first === 'object' && first !== null) {
+      return {
+        tmdbId: first.tmdbId || first.tmdb || first.id,
+        isTv: Boolean(first.isTv || first.type === 'tv' || first.type === 2),
+        season: first.season != null ? Number(first.season) : undefined,
+        episode: first.episode != null ? Number(first.episode) : undefined,
+      };
+    }
+    // Positional: (tmdbId, imdbId, title, isTv, season, episode, year)
+    return {
+      tmdbId: first,
+      isTv: Boolean(args[3]),
+      season: args[4] != null ? Number(args[4]) : undefined,
+      episode: args[5] != null ? Number(args[5]) : undefined,
+    };
+  }
+
+  function extractAsync() {
+    var params = parseArgs(arguments);
+    var tmdbId = params.tmdbId;
+    var isTv = params.isTv;
     var season = params.season;
     var episode = params.episode;
+
     console.log(TAG, 'Extracting tmdb:', tmdbId, isTv ? '(TV s' + season + 'e' + episode + ')' : '(Movie)');
+    if (!tmdbId) {
+      return Promise.reject(new Error(TAG + ' Missing tmdbId'));
+    }
+
     var idx = 0;
     function tryNext() {
       if (idx >= SERVERS.length) return Promise.reject(new Error(TAG + ' All servers failed for tmdb:' + tmdbId));
@@ -419,7 +491,29 @@
       return tryServer(server, tmdbId, isTv, season, episode).then(function (result) {
         if (result) {
           return fetchSubtitles(tmdbId, isTv, season, episode).then(function (subs) {
-            return { stream: result.stream, subtitles: (result.captions || []).concat(subs), server: result.server, type: 'hls' };
+            var rawSubs = (result.captions || []).concat(subs || []);
+            var formattedSubs = rawSubs.map(function (s) {
+              return {
+                url: s.url,
+                lang: s.language || s.lang || s.label || 'Unknown',
+                label: s.label || s.language || s.lang || 'Unknown',
+                type: s.type || 'srt',
+              };
+            });
+            return {
+              url: result.stream,
+              stream: result.stream,
+              quality: 'Auto',
+              provider: 'CineJoy',
+              server: result.server,
+              type: 'hls',
+              headers: {
+                Referer: 'https://cinejoy.to/',
+                Origin: 'https://cinejoy.to',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36',
+              },
+              subtitles: formattedSubs,
+            };
           });
         }
         return tryNext();
@@ -429,10 +523,20 @@
   }
 
   // Dual API: returns Promise AND calls callback (supports both MultiExtractor styles)
-  function extract(params, callback) {
-    var promise = extractAsync(params);
-    if (typeof callback === 'function') {
-      promise.then(function (r) { callback(null, r); }).catch(function (e) { callback(e, null); });
+  function extract() {
+    var args = Array.prototype.slice.call(arguments);
+    var cb = null;
+
+    // Check if the last argument is a callback function
+    if (args.length > 1 && typeof args[args.length - 1] === 'function') {
+      cb = args.pop();
+    } else if (typeof args[0] === 'object' && args[0] !== null && typeof args[0].callback === 'function') {
+      cb = args[0].callback;
+    }
+
+    var promise = extractAsync.apply(null, args);
+    if (typeof cb === 'function') {
+      promise.then(function (r) { cb(null, r); }).catch(function (e) { cb(e, null); });
     }
     return promise;
   }
@@ -440,8 +544,8 @@
   // ─── Export ───────────────────────────────────────────────────────────────────
   var extractor = {
     name: 'CineJoy',
-    version: '3.2.1',
-    description: 'CineJoy lumen-gate-v1 sandbox — BOqDcafn.js (fixed RN compat + Promise API)',
+    version: '3.2.2',
+    description: 'CineJoy lumen-gate-v1 sandbox — BOqDcafn.js (fixed Hermes global shims + flexible args)',
     extract: extract,
     fetchSubtitles: fetchSubtitles,
     resetSession: resetSession,

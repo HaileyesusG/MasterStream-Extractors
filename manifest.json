@@ -1,10 +1,9 @@
 {
-    "version":  195,
+    "version":  196,
     "providerPriority":  [
                              "Videasy",
                              "VaPlayer",
                              "VaPlayer",
-                             "CineJoy",
                              "VidFast",
                              "VixSrc",
                              "OzTv",
@@ -28,16 +27,6 @@
                                                           "tv"
                                                       ]
                                    },
-                      "CineJoy":  {
-                                      "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "EA4BE0A67B8183CCC87CFE2ED674D51C",
-                                      "webBaseUrl":  "https://cinejoy.to/",
-                                      "nativeMode":  false,
-                                      "mediaTypes":  [
-                                                         "movie",
-                                                         "tv"
-                                                     ]
-                                  },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
                                       "hash":  "041B1A15EA692D3A0A369A99114663BA",

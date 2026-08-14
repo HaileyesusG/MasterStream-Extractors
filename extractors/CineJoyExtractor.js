@@ -916,8 +916,7 @@
           + '  return new Proxy(w, {'
           + '    get: function(t, p) {'
           + '      if (p in t) return t[p];'
-          + '      if (typeof globalThis !== "undefined" && p in globalThis) return globalThis[p];'
-          + '      if (typeof global !== "undefined" && p in global) return global[p];'
+          + '      if (typeof __rootGlobal__ !== "undefined" && __rootGlobal__ && p in __rootGlobal__) return __rootGlobal__[p];'
           + '      return undefined;'
           + '    }'
           + '  });'
@@ -928,19 +927,20 @@
           'var globalThis = window;',
         ].join('\n');
 
-        var fnBody = shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
+        var fnBody = 'var __rootGlobal__ = __cj_root__;\n' + shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
 
         var fn = new Function(
           '__cj_crypto__',
           '__cj_atob__',
           '__cj_btoa__',
           '__cj_fetch__',
+          '__cj_root__',
           fnBody
         );
 
         var Ax;
         try {
-          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim);
+          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim, g);
         } catch (evalErr) {
           console.warn(TAG + ' BOq eval error: ' + evalErr.message);
           throw evalErr;

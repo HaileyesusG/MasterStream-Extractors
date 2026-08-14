@@ -629,7 +629,7 @@
           try {
             var code = Buffer.concat(chunks).toString();
             var clean = code
-              .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
+              .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = { serverOrder: ["Lisbon", "Solara", "Athens", "Joy", "Castle", "Sakura", "Canaias"], servers: [], providers: [] };')
               .replace(/export\{[^}]*\};?/g, '');
 
             var sb = vm.createContext({
@@ -641,6 +641,7 @@
                   return arr;
                 },
               },
+              isSecureContext: true,
               TextEncoder: TextEncoder, TextDecoder: TextDecoder,
               URL: URL, URLSearchParams: URLSearchParams,
               atob: pureAtob, btoa: pureBtoa,
@@ -691,7 +692,7 @@
               Int8Array: Int8Array, Uint16Array: Uint16Array, Int32Array: Int32Array,
               Uint32Array: Uint32Array, Float32Array: Float32Array, Float64Array: Float64Array,
               Uint8ClampedArray: Uint8ClampedArray,
-              window: { location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to' }, navigator: { userAgent: '' }, addEventListener: noop },
+              window: { location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to' }, navigator: { userAgent: '' }, addEventListener: noop, isSecureContext: true },
               document: { querySelector: function () { return null; }, querySelectorAll: function () { return []; }, createElement: function () { return { style: {}, classList: { add: noop } }; }, cookie: '', currentScript: null, addEventListener: noop },
               navigator: { userAgent: USER_AGENT, language: fp.lang, hardwareConcurrency: fp.hc },
               location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
@@ -742,11 +743,6 @@
       : (typeof global !== 'undefined') ? global
       : (typeof window !== 'undefined') ? window : {};
 
-
-    // Install polyfill on real global (belt-and-suspenders)
-    try { if (!g.crypto || !g.crypto.subtle) g.crypto = polyCrypto; } catch (e) {}
-
-
     // ── fetch shim: global fetch (with injected headers) or XHR fallback ─────
     var fetchShim = (function () {
       if (typeof fetch !== 'undefined') {
@@ -794,27 +790,34 @@
       };
     })();
 
+    // Install persistent environment shims on real global
+    try {
+      g.crypto = polyCrypto;
+      g.isSecureContext = true;
+      if (typeof window !== 'undefined') {
+        window.crypto = polyCrypto;
+        window.isSecureContext = true;
+      }
+    } catch (e) {}
+
     return fetchShim(BOQ_URL, { headers: { 'User-Agent': USER_AGENT } })
       .then(function (res) {
         if (!res.ok) throw new Error('BOqDcafn download failed: HTTP ' + res.status);
         return res.text();
       })
       .then(function (code) {
-        // ── Fix 1: Import stripping with robust state store proxy ─────────────
         var clean = code
           .replace(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*["'];?/g, function (_, imports) {
             return imports.split(',').map(function (seg) {
               var parts = seg.trim().split(/\s+as\s+/);
               var localName = (parts[1] || parts[0]).trim().replace(/[^a-zA-Z0-9_$]/g, '');
-              return localName ? 'var ' + localName + ' = (function(){ var t={serverOrder:["Lisbon","Solara","Athens","Joy","Castle","Sakura","Canaias"],servers:[],providers:[],captions:[],audioTracks:[],qualities:[],sourceType:"hls",url:"",introSkip:null}; if(typeof Proxy!=="undefined"){return new Proxy(t,{get:function(o,k){if(k in o)return o[k];if(k==="prototype")return undefined;return function(){return undefined;};}});} return t; })();' : '';
+              return localName ? 'var ' + localName + ' = { serverOrder: ["Lisbon","Solara","Athens","Joy","Castle","Sakura","Canaias"], servers: [], providers: [] };' : '';
             }).filter(Boolean).join(' ');
           })
           .replace(/export\s*\{[^}]*\}\s*;?/g, '');
 
-        // ── Fix 2: Shim variable declarations ────────────────────────────────────
         var UA = JSON.stringify(USER_AGENT);
         var shimDecls = [
-          // DOM stubs — always inline, self-contained
           'var HTMLElement    = function HTMLElement(){};',
           'var SVGElement     = function SVGElement(){};',
           'var Element        = function Element(){};',
@@ -826,30 +829,24 @@
           'var ResizeObserver       = function ResizeObserver(cb){this.observe=function(){};this.disconnect=function(){};};',
           'var IntersectionObserver = function IntersectionObserver(cb){this.observe=function(){};this.disconnect=function(){};};',
           'var AbortController = function AbortController(){var n=function(){};this.signal={aborted:false,addEventListener:n,removeEventListener:n};this.abort=n;};',
-          'var AbortSignal = {timeout:function(){return{aborted:false,addEventListener:function(){},removeEventListener:function(){}};} };',
           'var customElements = {define:function(){},get:function(){return null;},whenDefined:function(){return Promise.resolve();}};',
           'var isSecureContext = true;',
-          // Utilities — self-contained or passed as params
           'var structuredClone = function(x){return JSON.parse(JSON.stringify(x));};',
           'var performance     = {now:function(){return Date.now();},mark:function(){},measure:function(){}};',
           'var requestAnimationFrame = function(){};',
           'var cancelAnimationFrame  = function(){};',
-          // Passed as named params → safe (not affected by hoisting)
           'var crypto = __cj_crypto__;',
           'var atob   = __cj_atob__;',
           'var btoa   = __cj_btoa__;',
           'var fetch  = __cj_fetch__;',
-          // Objects that reference other shim vars must be fully self-contained
           'var navigator = {userAgent:' + UA + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true};',
           'var location  = {href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"};',
           'var history   = {pushState:function(){},replaceState:function(){},state:null};',
-          // document — self-contained
           'var document = (function(){'
           + 'var n=function(){};'
           + 'var mkEl=function(t){return{tagName:t.toUpperCase(),style:{},classList:{add:n,remove:n,contains:function(){return false;},toggle:n},setAttribute:n,getAttribute:function(){return null;},addEventListener:n,removeEventListener:n,appendChild:n,removeChild:n,children:[],innerHTML:"",textContent:""};};'
           + 'return{querySelector:function(){return null;},querySelectorAll:function(){return{forEach:n,length:0};},getElementById:function(){return null;},createElement:mkEl,createTextNode:function(t){return{textContent:t};},head:{appendChild:n},body:{appendChild:n,style:{}},cookie:"",currentScript:null,addEventListener:n,removeEventListener:n,dispatchEvent:n,readyState:"complete",hidden:false};'
           + '})();',
-          // window — all values MUST be self-contained (no var-name refs!)
           'var window = (function(){'
           + 'var n=function(){};'
           + 'return{'
@@ -883,7 +880,7 @@
 
         var Ax;
         try {
-          Ax = fn(polyCrypto, pureAtob, pureBtoa, fetchShim);
+          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim);
         } catch (evalErr) {
           console.warn(TAG + ' BOq eval error: ' + evalErr.message);
           throw evalErr;
@@ -896,7 +893,7 @@
 
   function getBoqBundle() {
     if (!_boqPromise) {
-      _boqPromise = loadBoqEval().catch(function (e) {
+      _boqPromise = (IS_NODE ? loadBoqNode() : loadBoqEval()).catch(function (e) {
         _boqPromise = null;
         throw e;
       });

@@ -1,23 +1,33 @@
 {
-    "version":  196,
+    "version":  197,
     "providerPriority":  [
                              "Videasy",
+                             "CineJoy",
+                             "LordFlix",
+                             "VidVault",
                              "VaPlayer",
-                             "VaPlayer",
-                             "VidFast",
                              "VixSrc",
+                             "VidFast",
                              "OzTv",
                              "VidSrc",
                              "VidSrcCC",
-                             "LordFlix",
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
                              "VidSrcMe",
-                             "Vidlink",
-                             "VidVault"
+                             "Vidlink"
                          ],
     "providers":  {
+                      "CineJoy":  {
+                                       "file":  "extractors/CineJoyExtractor.js",
+                                       "hash":  "EA4BE0A67B8183CCC87CFE2ED674D51C",
+                                       "webBaseUrl":  "https://cinejoy.to/",
+                                       "nativeMode":  false,
+                                       "mediaTypes":  [
+                                                          "movie",
+                                                          "tv"
+                                                      ]
+                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
                                        "hash":  "EFFE702D157DA7011EE00DE14DE5E66A",

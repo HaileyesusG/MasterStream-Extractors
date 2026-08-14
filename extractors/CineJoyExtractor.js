@@ -800,30 +800,18 @@
         return res.text();
       })
       .then(function (code) {
-        // ── Fix 1: Import stripping ──────────────────────────────────────────────
-        // Old (BROKEN): replace entire import with 'var X = {}' — identifiers like
-        //   f, g, baz go undeclared → f.prototype crashes.
-        // New (CORRECT): extract every local identifier and declare each as a stub.
-        //   import{F as f, G}from"./x" → var f = {}; var G = {};
+        // ── Fix 1: Import stripping with robust state store proxy ─────────────
         var clean = code
           .replace(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*["'];?/g, function (_, imports) {
             return imports.split(',').map(function (seg) {
               var parts = seg.trim().split(/\s+as\s+/);
               var localName = (parts[1] || parts[0]).trim().replace(/[^a-zA-Z0-9_$]/g, '');
-              return localName ? 'var ' + localName + ' = {};' : '';
+              return localName ? 'var ' + localName + ' = (function(){ var t={serverOrder:["Lisbon","Solara","Athens","Joy","Castle","Sakura","Canaias"],servers:[],providers:[],captions:[],audioTracks:[],qualities:[],sourceType:"hls",url:"",introSkip:null}; if(typeof Proxy!=="undefined"){return new Proxy(t,{get:function(o,k){if(k in o)return o[k];if(k==="prototype")return undefined;return function(){return undefined;};}});} return t; })();' : '';
             }).filter(Boolean).join(' ');
           })
           .replace(/export\s*\{[^}]*\}\s*;?/g, '');
 
         // ── Fix 2: Shim variable declarations ────────────────────────────────────
-        // CRITICAL RULE: Never reference outer variable names inside the string.
-        // Reason: inside `new Function`, `var X` hoists to the function's own scope.
-        // So `var X = X` → RHS 'X' finds the hoisted (undefined) local var, not global.
-        // ALL values here must be SELF-CONTAINED inline expressions only.
-        //
-        // Values that can't be serialized to a string (polyCrypto, pureAtob, etc.)
-        // are passed as named PARAMETERS to new Function — parameter bindings are
-        // not affected by var hoisting of the body.
         var UA = JSON.stringify(USER_AGENT);
         var shimDecls = [
           // DOM stubs — always inline, self-contained
@@ -840,6 +828,7 @@
           'var AbortController = function AbortController(){var n=function(){};this.signal={aborted:false,addEventListener:n,removeEventListener:n};this.abort=n;};',
           'var AbortSignal = {timeout:function(){return{aborted:false,addEventListener:function(){},removeEventListener:function(){}};} };',
           'var customElements = {define:function(){},get:function(){return null;},whenDefined:function(){return Promise.resolve();}};',
+          'var isSecureContext = true;',
           // Utilities — self-contained or passed as params
           'var structuredClone = function(x){return JSON.parse(JSON.stringify(x));};',
           'var performance     = {now:function(){return Date.now();},mark:function(){},measure:function(){}};',
@@ -869,8 +858,9 @@
           + 'history:{pushState:n,replaceState:n,state:null},'
           + 'screen:{width:390,height:844,colorDepth:24},'
           + 'devicePixelRatio:2,'
+          + 'isSecureContext:true,'
           + 'performance:{now:function(){return Date.now();},mark:n,measure:n},'
-          + 'crypto:__cj_crypto__,'    // param — no hoisting issue
+          + 'crypto:__cj_crypto__,'
           + 'addEventListener:n,removeEventListener:n,dispatchEvent:n,'
           + 'requestAnimationFrame:n,cancelAnimationFrame:n,'
           + 'setTimeout:setTimeout,clearTimeout:clearTimeout,'
@@ -883,8 +873,6 @@
 
         var fnBody = shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
 
-        // Named params: __cj_crypto__ etc. are bound in the function's PARAMETER scope,
-        // which is outer to the function body — var hoisting in the body cannot shadow them.
         var fn = new Function(
           '__cj_crypto__',
           '__cj_atob__',
@@ -908,7 +896,7 @@
 
   function getBoqBundle() {
     if (!_boqPromise) {
-      _boqPromise = (IS_NODE ? loadBoqNode() : loadBoqEval()).catch(function (e) {
+      _boqPromise = loadBoqEval().catch(function (e) {
         _boqPromise = null;
         throw e;
       });

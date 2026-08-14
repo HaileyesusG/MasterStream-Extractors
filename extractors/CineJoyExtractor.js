@@ -885,7 +885,7 @@
           + '})();',
           'var window = (function(){'
           + 'var n=function(){};'
-          + 'return{'
+          + 'var w = {'
           + 'location:{href:"https://cinejoy.to/",hostname:"cinejoy.to",origin:"https://cinejoy.to",pathname:"/"},'
           + 'navigator:{userAgent:' + UA + ',language:"en",hardwareConcurrency:4,maxTouchPoints:5,onLine:true},'
           + 'history:{pushState:n,replaceState:n,state:null},'
@@ -911,6 +911,18 @@
           + 'setTimeout:setTimeout,clearTimeout:clearTimeout,'
           + 'setInterval:setInterval,clearInterval:clearInterval'
           + '};'
+          + 'w.window = w; w.self = w; w.globalThis = w;'
+          + 'if (typeof Proxy !== "undefined") {'
+          + '  return new Proxy(w, {'
+          + '    get: function(t, p) {'
+          + '      if (p in t) return t[p];'
+          + '      if (typeof globalThis !== "undefined" && p in globalThis) return globalThis[p];'
+          + '      if (typeof global !== "undefined" && p in global) return global[p];'
+          + '      return undefined;'
+          + '    }'
+          + '  });'
+          + '}'
+          + 'return w;'
           + '})();',
           'var self       = window;',
           'var globalThis = window;',

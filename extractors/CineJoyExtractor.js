@@ -1,5 +1,5 @@
 /**
- * CineJoyExtractor v3.2.1 — self-contained CommonJS for remote hot-update.
+ * CineJoyExtractor v3.3.0 — self-contained CommonJS for remote hot-update.
  *
  * Strategy: Use cinejoy.to's own BOqDcafn.js (sandboxed) for the lumen-gate-v1
  * session protocol. This guarantees correctness as the site updates its crypto.
@@ -235,18 +235,49 @@
       cancelAnimationFrame: noop,
       structuredClone: function (x) { return JSON.parse(JSON.stringify(x)); },
       fetch: function () { return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.resolve({}); }, text: function () { return Promise.resolve(''); } }); },
+      // Pure-JS atob/btoa — handles base64url (-, _) and works in Hermes without Buffer
+      atob: (function () {
+        var T = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        return function (s) {
+          s = String(s).replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/]/g, '');
+          var out = '', i = 0;
+          while (i < s.length) {
+            var c0 = T.indexOf(s[i++]), c1 = T.indexOf(s[i++]);
+            var c2 = i <= s.length ? T.indexOf(s[i++]) : 64;
+            var c3 = i <= s.length ? T.indexOf(s[i++]) : 64;
+            if (c1 >= 0) out += String.fromCharCode((c0 << 2) | (c1 >> 4));
+            if (c2 >= 0 && c2 < 64) out += String.fromCharCode(((c1 & 0xf) << 4) | (c2 >> 2));
+            if (c3 >= 0 && c3 < 64) out += String.fromCharCode(((c2 & 0x3) << 6) | c3);
+          }
+          return out;
+        };
+      })(),
+      btoa: (function () {
+        var T = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        return function (s) {
+          s = String(s); var out = '';
+          for (var i = 0; i < s.length; i += 3) {
+            var b0 = s.charCodeAt(i) & 0xff, b1 = i+1 < s.length ? s.charCodeAt(i+1) & 0xff : 0, b2 = i+2 < s.length ? s.charCodeAt(i+2) & 0xff : 0;
+            out += T[b0>>2] + T[((b0&3)<<4)|(b1>>4)] + (i+1<s.length?T[((b1&0xf)<<2)|(b2>>6)]:'=') + (i+2<s.length?T[b2&0x3f]:'=');
+          }
+          return out;
+        };
+      })(),
+      URL: typeof URL !== 'undefined' ? URL : null,
+      URLSearchParams: typeof URLSearchParams !== 'undefined' ? URLSearchParams : null,
+      TextEncoder: typeof TextEncoder !== 'undefined' ? TextEncoder : null,
+      TextDecoder: typeof TextDecoder !== 'undefined' ? TextDecoder : null,
+      crypto: realCrypto,
     };
 
-    // Only inject shims for globals that are missing
+    // Override globals (skip null — means "use whatever exists")
     var toRestore = [];
     for (var k in SHIMS) {
-      if (Object.prototype.hasOwnProperty.call(SHIMS, k)) {
+      if (Object.prototype.hasOwnProperty.call(SHIMS, k) && SHIMS[k] != null) {
         try {
           _saved[k] = g[k];
-          if (typeof g[k] === 'undefined') {
-            g[k] = SHIMS[k];
-            toRestore.push(k);
-          }
+          g[k] = SHIMS[k];
+          toRestore.push(k);
         } catch (e) {}
       }
     }
@@ -551,7 +582,7 @@
   var extractor = {
     name: 'CineJoy',
     version: '3.2.2',
-    description: 'CineJoy lumen-gate-v1 sandbox — BOqDcafn.js (fixed Hermes global shims + flexible args)',
+    description: 'CineJoy lumen-gate-v1 sandbox — BOqDcafn.js (Hermes shim fix: pure-JS atob/btoa, always-override crypto/TextEncoder/URL)',
     extract: extract,
     fetchSubtitles: fetchSubtitles,
     resetSession: resetSession,

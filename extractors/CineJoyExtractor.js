@@ -916,7 +916,8 @@
           + '  return new Proxy(w, {'
           + '    get: function(t, p) {'
           + '      if (p in t) return t[p];'
-          + '      if (typeof __rootGlobal__ !== "undefined" && __rootGlobal__ && p in __rootGlobal__) return __rootGlobal__[p];'
+          + '      if (typeof globalThis !== "undefined" && p in globalThis) return globalThis[p];'
+          + '      if (typeof global !== "undefined" && p in global) return global[p];'
           + '      return undefined;'
           + '    }'
           + '  });'
@@ -927,20 +928,19 @@
           'var globalThis = window;',
         ].join('\n');
 
-        var fnBody = 'var __rootGlobal__ = __cj_root__;\n' + shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
+        var fnBody = shimDecls + '\n' + clean + '\n; return typeof Ax !== "undefined" ? Ax : null;';
 
         var fn = new Function(
           '__cj_crypto__',
           '__cj_atob__',
           '__cj_btoa__',
           '__cj_fetch__',
-          '__cj_root__',
           fnBody
         );
 
         var Ax;
         try {
-          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim, g);
+          Ax = fn.call(g, polyCrypto, pureAtob, pureBtoa, fetchShim);
         } catch (evalErr) {
           console.warn(TAG + ' BOq eval error: ' + evalErr.message);
           throw evalErr;
@@ -980,8 +980,71 @@
     return subs;
   }
 
+  // ─── Extract via Backend API (used on React Native / Hermes) ──────────────────
+  var BACKEND_ENDPOINTS = [
+    'https://backendmasterstream.onrender.com/api/cinejoy/extract',
+    'http://192.168.100.2:5000/api/cinejoy/extract',
+  ];
+
+  async function extractViaBackend(tmdbId, imdbId, title, isTv, season, episode, year) {
+    var type = isTv ? 'tv' : 'movie';
+    var qs = '?tmdbId=' + encodeURIComponent(tmdbId) + '&type=' + type;
+    if (isTv) {
+      qs += '&season=' + encodeURIComponent(season || 1) + '&episode=' + encodeURIComponent(episode || 1);
+    }
+    if (imdbId) qs += '&imdbId=' + encodeURIComponent(imdbId);
+    if (title) qs += '&title=' + encodeURIComponent(title);
+    if (year) qs += '&year=' + encodeURIComponent(year);
+
+    for (var i = 0; i < BACKEND_ENDPOINTS.length; i++) {
+      var endpoint = BACKEND_ENDPOINTS[i] + qs;
+      try {
+        console.log(TAG + ' Fetching from backend endpoint: ' + BACKEND_ENDPOINTS[i]);
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 15000) : null;
+
+        var res = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': USER_AGENT,
+          },
+          signal: controller ? controller.signal : undefined,
+        });
+
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (res.ok) {
+          var data = await res.json();
+          if (data && data.ok && data.url) {
+            console.log(TAG + ' ✅ Stream extracted via backend API: ' + data.url.slice(0, 60) + '...');
+            return {
+              url: data.url,
+              quality: data.quality || 'Auto',
+              provider: 'CineJoy',
+              headers: data.headers || {
+                'Referer': 'https://cinejoy.to/',
+                'Origin': 'https://cinejoy.to',
+                'User-Agent': USER_AGENT,
+              },
+              subtitles: data.subtitles || [],
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(TAG + ' Endpoint ' + BACKEND_ENDPOINTS[i] + ' failed: ' + (err.message || err));
+      }
+    }
+
+    return null;
+  }
+
   // ─── Primary Extract Function ─────────────────────────────────────────────────
   async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
+    if (!IS_NODE) {
+      return await extractViaBackend(tmdbId, imdbId, title, isTv, season, episode, year);
+    }
+
     try {
       var bundle = await getBoqBundle();
       if (!bundle || !bundle.Ax) {

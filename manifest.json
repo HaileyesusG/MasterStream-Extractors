@@ -66,7 +66,7 @@
     },
     "VixSrc": {
       "file": "extractors/VixSrcExtractor.js",
-      "hash": "E0A580DA8E230F5DCEC268AD46620C5F",
+      "hash": "AE95CFF6C882D7540CF5F6084D5BEA50",
       "nativeMode": false,
       "mediaTypes": [
         "movie",

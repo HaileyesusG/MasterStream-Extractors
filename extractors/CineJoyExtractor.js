@@ -1,12 +1,12 @@
 /**
- * CineJoyExtractor v3.4.0 — self-contained CommonJS for remote hot-update.
+ * CineJoyExtractor v3.5.0 — self-contained CommonJS for remote hot-update.
  *
- * Strategy: Use cinejoy.to's own BOqDcafn.js bundle for the lumen-gate-v1
- * session protocol. Uses native Ax() master extractor for automatic server
- * negotiation (Lisbon, Solara, Athens, Joy, Castle, Sakura, Canaias) and stream
- * discovery with fallback to manual server iterate.
+ * Strategy: Use cinejoy.to's own BOqDcafn.js bundle with built-in pure-JS
+ * SubtleCrypto polyfill (ECDH P-256, AES-GCM-256, SHA-256, HKDF) for Hermes/React Native.
+ * Uses native Ax() master extractor for automatic server negotiation
+ * (Lisbon, Solara, Athens, Joy, Castle, Sakura, Canaias) and stream discovery.
  *
- * Compatible with React Native (Hermes) and Node.js.
+ * 100% JS/API based. No stream sniffer / WebView required.
  */
 (function () {
   'use strict';
@@ -14,10 +14,551 @@
   var TAG = '[CineJoyExtractor]';
   var BOQ_URL = 'https://cinejoy.to/_app/immutable/chunks/BOqDcafn.js';
   var SUBS_BASE = 'https://subtitles.shegu.st';
-  var SERVERS = ['Lisbon', 'Solara', 'Athens', 'Joy', 'Castle'];
   var TIMEOUT_MS = 15000;
+  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   var IS_NODE = typeof process !== 'undefined' && process.versions && !!process.versions.node;
+
+  // ─── Pure-JS SubtleCrypto Implementation for Hermes / React Native ──────────
+  function toU8(data) {
+    if (!data) return new Uint8Array(0);
+    if (data instanceof Uint8Array) return data;
+    if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    return new Uint8Array(data);
+  }
+
+  // SHA-256 & HMAC-SHA256
+  var K256 = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ]);
+
+  function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+  function pureSha256(data) {
+    var u8 = toU8(data);
+    var len = u8.length;
+    var bitLen = len * 8;
+    var padLen = (len % 64 < 56) ? (56 - (len % 64)) : (120 - (len % 64));
+    var totalLen = len + padLen + 8;
+    var buf = new Uint8Array(totalLen);
+    buf.set(u8);
+    buf[len] = 0x80;
+    var view = new DataView(buf.buffer);
+    view.setUint32(totalLen - 4, bitLen, false);
+
+    var H = new Uint32Array([
+      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ]);
+
+    var W = new Uint32Array(64);
+    for (var i = 0; i < totalLen; i += 64) {
+      for (var t = 0; t < 16; t++) {
+        W[t] = view.getUint32(i + t * 4, false);
+      }
+      for (var t = 16; t < 64; t++) {
+        var s0 = rotr(W[t - 15], 7) ^ rotr(W[t - 15], 18) ^ (W[t - 15] >>> 3);
+        var s1 = rotr(W[t - 2], 17) ^ rotr(W[t - 2], 19) ^ (W[t - 2] >>> 10);
+        W[t] = (W[t - 16] + s0 + W[t - 7] + s1) >>> 0;
+      }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (var t = 0; t < 64; t++) {
+        var S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        var ch = (e & f) ^ ((~e) & g);
+        var temp1 = (h + S1 + ch + K256[t] + W[t]) >>> 0;
+        var S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var temp2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + temp1) >>> 0;
+        d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+      }
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+    }
+
+    var out = new Uint8Array(32);
+    var outView = new DataView(out.buffer);
+    for (var j = 0; j < 8; j++) outView.setUint32(j * 4, H[j], false);
+    return out;
+  }
+
+  function pureHmacSha256(key, data) {
+    var k = toU8(key);
+    var d = toU8(data);
+    if (k.length > 64) k = pureSha256(k);
+    var kPad = new Uint8Array(64);
+    kPad.set(k);
+
+    var oKeyPad = new Uint8Array(64);
+    var iKeyPad = new Uint8Array(64);
+    for (var i = 0; i < 64; i++) {
+      oKeyPad[i] = kPad[i] ^ 0x5c;
+      iKeyPad[i] = kPad[i] ^ 0x36;
+    }
+
+    var inner = new Uint8Array(64 + d.length);
+    inner.set(iKeyPad);
+    inner.set(d, 64);
+    var innerHash = pureSha256(inner);
+
+    var outer = new Uint8Array(64 + 32);
+    outer.set(oKeyPad);
+    outer.set(innerHash, 64);
+    return pureSha256(outer);
+  }
+
+  function pureHkdf(ikm, salt, info, length) {
+    var sU8 = toU8(salt);
+    var s = sU8.length > 0 ? sU8 : new Uint8Array(32);
+    var prk = pureHmacSha256(s, toU8(ikm));
+    var inf = toU8(info);
+
+    var n = Math.ceil(length / 32);
+    var okm = new Uint8Array(n * 32);
+    var t = new Uint8Array(0);
+
+    for (var i = 1; i <= n; i++) {
+      var stepInput = new Uint8Array(t.length + inf.length + 1);
+      stepInput.set(t);
+      stepInput.set(inf, t.length);
+      stepInput[stepInput.length - 1] = i;
+      t = pureHmacSha256(prk, stepInput);
+      okm.set(t, (i - 1) * 32);
+    }
+    return okm.slice(0, length);
+  }
+
+  // ECDH P-256 Curve Math
+  var EC_P = BigInt('0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF');
+  var EC_A = BigInt('0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFC');
+  var EC_N = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+  var EC_Gx = BigInt('0x6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296');
+  var EC_Gy = BigInt('0x4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5');
+
+  function ecMod(a, m) { var r = a % m; return r < 0n ? r + m : r; }
+  function ecModInverse(k, m) {
+    var m0 = m, y = 0n, x = 1n;
+    if (m === 1n) return 0n;
+    while (k > 1n) {
+      var q = k / m, t = m;
+      m = k % m; k = t; t = y;
+      y = x - q * y; x = t;
+    }
+    return x < 0n ? x + m0 : x;
+  }
+
+  function ecPointAdd(P1, P2) {
+    if (!P1) return P2;
+    if (!P2) return P1;
+    var x1 = P1.x, y1 = P1.y, x2 = P2.x, y2 = P2.y;
+    if (x1 === x2 && y1 === y2) return ecPointDouble(P1);
+    if (x1 === x2) return null;
+    var slope = ecMod((y2 - y1) * ecModInverse(ecMod(x2 - x1, EC_P), EC_P), EC_P);
+    var x3 = ecMod(slope * slope - x1 - x2, EC_P);
+    var y3 = ecMod(slope * (x1 - x3) - y1, EC_P);
+    return { x: x3, y: y3 };
+  }
+
+  function ecPointDouble(Pt) {
+    if (!Pt) return null;
+    var x1 = Pt.x, y1 = Pt.y;
+    if (y1 === 0n) return null;
+    var slope = ecMod((3n * x1 * x1 + EC_A) * ecModInverse(2n * y1, EC_P), EC_P);
+    var x3 = ecMod(slope * slope - 2n * x1, EC_P);
+    var y3 = ecMod(slope * (x1 - x3) - y1, EC_P);
+    return { x: x3, y: y3 };
+  }
+
+  function ecPointMultiply(k, Pt) {
+    var R = null, Q = Pt;
+    var kVal = k;
+    while (kVal > 0n) {
+      if (kVal & 1n) R = ecPointAdd(R, Q);
+      Q = ecPointDouble(Q);
+      kVal >>= 1n;
+    }
+    return R;
+  }
+
+  function bigIntToU8(bi, len) {
+    var hex = bi.toString(16).padStart(len * 2, '0');
+    var u8 = new Uint8Array(len);
+    for (var i = 0; i < len; i++) u8[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return u8;
+  }
+
+  function u8ToBigInt(u8) {
+    var hex = '';
+    for (var i = 0; i < u8.length; i++) hex += u8[i].toString(16).padStart(2, '0');
+    return BigInt('0x' + hex);
+  }
+
+  // Table-driven AES-256 & BigInt GHASH
+  var AES_TABLES = (function() {
+    var SBOX = [];
+    var SUB_MIX_0 = [], SUB_MIX_1 = [], SUB_MIX_2 = [], SUB_MIX_3 = [];
+    var RCON = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
+
+    var d = [];
+    for (var i = 0; i < 256; i++) {
+      if (i < 128) d[i] = i << 1;
+      else d[i] = (i << 1) ^ 0x11b;
+    }
+    var x = 0, xi = 0;
+    for (var i = 0; i < 256; i++) {
+      var sx = xi ^ (xi << 1) ^ (xi << 2) ^ (xi << 3) ^ (xi << 4);
+      sx = (sx >>> 8) ^ (sx & 0xff) ^ 0x63;
+      SBOX[x] = sx;
+
+      var x2 = d[x], x4 = d[x2], x8 = d[x4];
+      var t = (d[sx] * 0x101) ^ (sx * 0x1010100);
+      SUB_MIX_0[x] = (t << 24) | (t >>> 8);
+      SUB_MIX_1[x] = (t << 16) | (t >>> 16);
+      SUB_MIX_2[x] = (t << 8)  | (t >>> 24);
+      SUB_MIX_3[x] = t;
+
+      if (!x) { x = xi = 1; }
+      else { x = x2 ^ d[d[d[x8 ^ x2]]]; xi ^= d[d[xi]]; }
+    }
+
+    return { SBOX: SBOX, SUB_MIX_0: SUB_MIX_0, SUB_MIX_1: SUB_MIX_1, SUB_MIX_2: SUB_MIX_2, SUB_MIX_3: SUB_MIX_3, RCON: RCON };
+  })();
+
+  function aesExpandKey(keyU8) {
+    var keyWords = [];
+    for (var i = 0; i < keyU8.length; i += 4) {
+      keyWords.push(((keyU8[i] << 24) | (keyU8[i+1] << 16) | (keyU8[i+2] << 8) | keyU8[i+3]) >>> 0);
+    }
+    var keySize = keyWords.length;
+    var nRounds = keySize + 6;
+    var ksRows = (nRounds + 1) * 4;
+    var keySchedule = [];
+    var SBOX = AES_TABLES.SBOX, RCON = AES_TABLES.RCON;
+
+    for (var k = 0; k < keySize; k++) keySchedule[k] = keyWords[k];
+    for (var k = keySize; k < ksRows; k++) {
+      var temp = keySchedule[k - 1];
+      if (k % keySize === 0) {
+        temp = (temp << 8) | (temp >>> 24);
+        temp = (SBOX[temp >>> 24] << 24) | (SBOX[(temp >>> 16) & 0xff] << 16) | (SBOX[(temp >>> 8) & 0xff] << 8) | SBOX[temp & 0xff];
+        temp = temp ^ (RCON[(k / keySize) | 0] << 24);
+      } else if (keySize > 6 && k % keySize === 4) {
+        temp = (SBOX[temp >>> 24] << 24) | (SBOX[(temp >>> 16) & 0xff] << 16) | (SBOX[(temp >>> 8) & 0xff] << 8) | SBOX[temp & 0xff];
+      }
+      keySchedule[k] = (keySchedule[k - keySize] ^ temp) >>> 0;
+    }
+    return keySchedule;
+  }
+
+  function aesEncryptBlock(ptU8, keySchedule) {
+    var s0 = ((ptU8[0] << 24) | (ptU8[1] << 16) | (ptU8[2] << 8) | ptU8[3]) ^ keySchedule[0];
+    var s1 = ((ptU8[4] << 24) | (ptU8[5] << 16) | (ptU8[6] << 8) | ptU8[7]) ^ keySchedule[1];
+    var s2 = ((ptU8[8] << 24) | (ptU8[9] << 16) | (ptU8[10] << 8) | ptU8[11]) ^ keySchedule[2];
+    var s3 = ((ptU8[12] << 24) | (ptU8[13] << 16) | (ptU8[14] << 8) | ptU8[15]) ^ keySchedule[3];
+
+    var SBOX = AES_TABLES.SBOX;
+    var M0 = AES_TABLES.SUB_MIX_0, M1 = AES_TABLES.SUB_MIX_1, M2 = AES_TABLES.SUB_MIX_2, M3 = AES_TABLES.SUB_MIX_3;
+
+    var ksRow = 4;
+    for (var round = 1; round < 14; round++) {
+      var t0 = M0[s0 >>> 24] ^ M1[(s1 >>> 16) & 0xff] ^ M2[(s2 >>> 8) & 0xff] ^ M3[s3 & 0xff] ^ keySchedule[ksRow++];
+      var t1 = M0[s1 >>> 24] ^ M1[(s2 >>> 16) & 0xff] ^ M2[(s3 >>> 8) & 0xff] ^ M3[s0 & 0xff] ^ keySchedule[ksRow++];
+      var t2 = M0[s2 >>> 24] ^ M1[(s3 >>> 16) & 0xff] ^ M2[(s0 >>> 8) & 0xff] ^ M3[s1 & 0xff] ^ keySchedule[ksRow++];
+      var t3 = M0[s3 >>> 24] ^ M1[(s0 >>> 16) & 0xff] ^ M2[(s1 >>> 8) & 0xff] ^ M3[s2 & 0xff] ^ keySchedule[ksRow++];
+      s0 = t0; s1 = t1; s2 = t2; s3 = t3;
+    }
+
+    var t0 = ((SBOX[s0 >>> 24] << 24) | (SBOX[(s1 >>> 16) & 0xff] << 16) | (SBOX[(s2 >>> 8) & 0xff] << 8) | SBOX[s3 & 0xff]) ^ keySchedule[ksRow++];
+    var t1 = ((SBOX[s1 >>> 24] << 24) | (SBOX[(s2 >>> 16) & 0xff] << 16) | (SBOX[(s3 >>> 8) & 0xff] << 8) | SBOX[s0 & 0xff]) ^ keySchedule[ksRow++];
+    var t2 = ((SBOX[s2 >>> 24] << 24) | (SBOX[(s3 >>> 16) & 0xff] << 16) | (SBOX[(s0 >>> 8) & 0xff] << 8) | SBOX[s1 & 0xff]) ^ keySchedule[ksRow++];
+    var t3 = ((SBOX[s3 >>> 24] << 24) | (SBOX[(s0 >>> 16) & 0xff] << 16) | (SBOX[(s1 >>> 8) & 0xff] << 8) | SBOX[s2 & 0xff]) ^ keySchedule[ksRow++];
+
+    var out = new Uint8Array(16);
+    out[0] = (t0 >>> 24) & 0xff; out[1] = (t0 >>> 16) & 0xff; out[2] = (t0 >>> 8) & 0xff; out[3] = t0 & 0xff;
+    out[4] = (t1 >>> 24) & 0xff; out[5] = (t1 >>> 16) & 0xff; out[6] = (t1 >>> 8) & 0xff; out[7] = t1 & 0xff;
+    out[8] = (t2 >>> 24) & 0xff; out[9] = (t2 >>> 16) & 0xff; out[10] = (t2 >>> 8) & 0xff; out[11] = t2 & 0xff;
+    out[12] = (t3 >>> 24) & 0xff; out[13] = (t3 >>> 16) & 0xff; out[14] = (t3 >>> 8) & 0xff; out[15] = t3 & 0xff;
+    return out;
+  }
+
+  function ghashMultiply(x, y) {
+    var z0 = 0n, z1 = 0n;
+    var v0_0 = (BigInt(y[0]) << 24n) | (BigInt(y[1]) << 16n) | (BigInt(y[2]) << 8n) | BigInt(y[3]);
+    var v0_1 = (BigInt(y[4]) << 24n) | (BigInt(y[5]) << 16n) | (BigInt(y[6]) << 8n) | BigInt(y[7]);
+    var v1_0 = (BigInt(y[8]) << 24n) | (BigInt(y[9]) << 16n) | (BigInt(y[10]) << 8n) | BigInt(y[11]);
+    var v1_1 = (BigInt(y[12]) << 24n) | (BigInt(y[13]) << 16n) | (BigInt(y[14]) << 8n) | BigInt(y[15]);
+
+    var v0 = (v0_0 << 32n) | v0_1;
+    var v1 = (v1_0 << 32n) | v1_1;
+    var R = 0xe100000000000000n;
+
+    for (var i = 0; i < 16; i++) {
+      var byte = x[i];
+      for (var j = 7; j >= 0; j--) {
+        if ((byte >> j) & 1) {
+          z0 ^= v0;
+          z1 ^= v1;
+        }
+        var lsb = v1 & 1n;
+        v1 = (v1 >> 1n) | ((v0 & 1n) << 63n);
+        v0 = v0 >> 1n;
+        if (lsb) v0 ^= R;
+      }
+    }
+
+    var out = new Uint8Array(16);
+    var z0_0 = Number((z0 >> 56n) & 0xffn), z0_1 = Number((z0 >> 48n) & 0xffn), z0_2 = Number((z0 >> 40n) & 0xffn), z0_3 = Number((z0 >> 32n) & 0xffn);
+    var z0_4 = Number((z0 >> 24n) & 0xffn), z0_5 = Number((z0 >> 16n) & 0xffn), z0_6 = Number((z0 >> 8n) & 0xffn), z0_7 = Number(z0 & 0xffn);
+    var z1_0 = Number((z1 >> 56n) & 0xffn), z1_1 = Number((z1 >> 48n) & 0xffn), z1_2 = Number((z1 >> 40n) & 0xffn), z1_3 = Number((z1 >> 32n) & 0xffn);
+    var z1_4 = Number((z1 >> 24n) & 0xffn), z1_5 = Number((z1 >> 16n) & 0xffn), z1_6 = Number((z1 >> 8n) & 0xffn), z1_7 = Number(z1 & 0xffn);
+    out.set([z0_0,z0_1,z0_2,z0_3,z0_4,z0_5,z0_6,z0_7,z1_0,z1_1,z1_2,z1_3,z1_4,z1_5,z1_6,z1_7]);
+    return out;
+  }
+
+  function computeGhash(H, aad, ct) {
+    var S = new Uint8Array(16);
+    var aadU8 = toU8(aad);
+    var ctU8 = toU8(ct);
+
+    function process(data) {
+      if (!data || !data.length) return;
+      for (var i = 0; i < data.length; i += 16) {
+        var block = new Uint8Array(16);
+        for (var j = 0; j < 16 && (i + j) < data.length; j++) block[j] = data[i + j];
+        for (var j = 0; j < 16; j++) S[j] ^= block[j];
+        S = ghashMultiply(S, H);
+      }
+    }
+    process(aadU8);
+    process(ctU8);
+
+    var lenBlock = new Uint8Array(16);
+    var aadBits = BigInt(aadU8.length * 8);
+    var ctBits = BigInt(ctU8.length * 8);
+    for (var i = 0; i < 8; i++) {
+      lenBlock[7 - i] = Number((aadBits >> BigInt(i * 8)) & 0xffn);
+      lenBlock[15 - i] = Number((ctBits >> BigInt(i * 8)) & 0xffn);
+    }
+    for (var j = 0; j < 16; j++) S[j] ^= lenBlock[j];
+    return ghashMultiply(S, H);
+  }
+
+  function pureGcmEncrypt(keyU8, ivU8, ptU8, aadU8) {
+    var k = toU8(keyU8);
+    var iv = toU8(ivU8);
+    var pt = toU8(ptU8);
+    var aad = toU8(aadU8);
+
+    var rk = aesExpandKey(k);
+    var H = aesEncryptBlock(new Uint8Array(16), rk);
+
+    var J0 = new Uint8Array(16);
+    J0.set(iv.subarray(0, 12));
+    J0[15] = 1;
+
+    var ct = new Uint8Array(pt.length);
+    var CB = new Uint8Array(J0);
+    var ctr = 1;
+
+    for (var i = 0; i < pt.length; i += 16) {
+      ctr++;
+      CB[12] = (ctr >> 24) & 0xff; CB[13] = (ctr >> 16) & 0xff; CB[14] = (ctr >> 8) & 0xff; CB[15] = ctr & 0xff;
+      var encCB = aesEncryptBlock(CB, rk);
+      for (var j = 0; j < 16 && (i + j) < pt.length; j++) {
+        ct[i + j] = pt[i + j] ^ encCB[j];
+      }
+    }
+
+    var S = computeGhash(H, aad, ct);
+    var encJ0 = aesEncryptBlock(J0, rk);
+    var tag = new Uint8Array(16);
+    for (var j = 0; j < 16; j++) tag[j] = S[j] ^ encJ0[j];
+
+    var out = new Uint8Array(ct.length + 16);
+    out.set(ct);
+    out.set(tag, ct.length);
+    return out;
+  }
+
+  function pureGcmDecrypt(keyU8, ivU8, ctWithTagU8, aadU8) {
+    var k = toU8(keyU8);
+    var iv = toU8(ivU8);
+    var ctWithTag = toU8(ctWithTagU8);
+    var aad = toU8(aadU8);
+
+    if (ctWithTag.length < 16) throw new Error('Ciphertext too short');
+    var ctLen = ctWithTag.length - 16;
+    var ct = ctWithTag.subarray(0, ctLen);
+    var tag = ctWithTag.subarray(ctLen);
+
+    var rk = aesExpandKey(k);
+    var H = aesEncryptBlock(new Uint8Array(16), rk);
+
+    var J0 = new Uint8Array(16);
+    J0.set(iv.subarray(0, 12));
+    J0[15] = 1;
+
+    var S = computeGhash(H, aad, ct);
+    var encJ0 = aesEncryptBlock(J0, rk);
+    var expectedTag = new Uint8Array(16);
+    for (var j = 0; j < 16; j++) expectedTag[j] = S[j] ^ encJ0[j];
+
+    var diff = 0;
+    for (var j = 0; j < 16; j++) diff |= (tag[j] ^ expectedTag[j]);
+    if (diff !== 0) throw new Error('AES-GCM tag verification failed');
+
+    var pt = new Uint8Array(ctLen);
+    var CB = new Uint8Array(J0);
+    var ctr = 1;
+    for (var i = 0; i < ctLen; i += 16) {
+      ctr++;
+      CB[12] = (ctr >> 24) & 0xff; CB[13] = (ctr >> 16) & 0xff; CB[14] = (ctr >> 8) & 0xff; CB[15] = ctr & 0xff;
+      var encCB = aesEncryptBlock(CB, rk);
+      for (var j = 0; j < 16 && (i + j) < ctLen; j++) {
+        pt[i + j] = ct[i + j] ^ encCB[j];
+      }
+    }
+    return pt;
+  }
+
+  function createPureSubtle() {
+    return {
+      generateKey: function(algorithm, extractable, keyUsages) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'ECDH') {
+          var rand = new Uint8Array(32);
+          if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(rand);
+          else for (var i = 0; i < 32; i++) rand[i] = (Math.random() * 256) | 0;
+          var d = ecMod(u8ToBigInt(rand), EC_N - 1n) + 1n;
+          var Q = ecPointMultiply(d, { x: EC_Gx, y: EC_Gy });
+          var rawPub = new Uint8Array(65);
+          rawPub[0] = 0x04;
+          rawPub.set(bigIntToU8(Q.x, 32), 1);
+          rawPub.set(bigIntToU8(Q.y, 32), 33);
+
+          var privKey = { type: 'private', algorithm: algorithm, extractable: extractable, usages: keyUsages, _d: d };
+          var pubKey = { type: 'public', algorithm: algorithm, extractable: extractable, usages: keyUsages, _raw: rawPub.buffer.slice(0, 65) };
+          return Promise.resolve({ privateKey: privKey, publicKey: pubKey });
+        }
+        return Promise.reject(new Error('Unsupported generateKey: ' + algName));
+      },
+
+      exportKey: function(format, key) {
+        if (format === 'raw' && key._raw) {
+          return Promise.resolve(key._raw);
+        }
+        return Promise.reject(new Error('Unsupported exportKey format: ' + format));
+      },
+
+      importKey: function(format, keyData, algorithm, extractable, keyUsages) {
+        var u8 = toU8(keyData);
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'ECDH') {
+          if (u8.length === 65 && u8[0] === 0x04) {
+            var qx = u8ToBigInt(u8.subarray(1, 33));
+            var qy = u8ToBigInt(u8.subarray(33, 65));
+            return Promise.resolve({
+              type: 'public',
+              algorithm: typeof algorithm === 'object' ? algorithm : { name: 'ECDH', namedCurve: 'P-256' },
+              extractable: extractable,
+              usages: keyUsages,
+              _point: { x: qx, y: qy },
+              _raw: u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength),
+            });
+          }
+          return Promise.reject(new Error('Invalid ECDH raw key length: ' + u8.length));
+        }
+        if (algName === 'AES-GCM' || algName === 'aes-gcm') {
+          return Promise.resolve({
+            type: 'secret',
+            algorithm: typeof algorithm === 'object' ? algorithm : { name: 'AES-GCM' },
+            extractable: extractable,
+            usages: keyUsages,
+            _key: u8,
+          });
+        }
+        if (algName === 'HKDF' || algName === 'hkdf') {
+          return Promise.resolve({
+            type: 'secret',
+            algorithm: typeof algorithm === 'object' ? algorithm : { name: 'HKDF' },
+            extractable: extractable,
+            usages: keyUsages,
+            _ikm: u8,
+          });
+        }
+        return Promise.reject(new Error('Unsupported importKey algorithm: ' + JSON.stringify(algorithm)));
+      },
+
+      deriveKey: function(algorithm, baseKey, derivedKeyType, extractable, keyUsages) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'HKDF') {
+          var ikm = baseKey._ikm;
+          if (!ikm) return Promise.reject(new Error('Missing baseKey._ikm for HKDF'));
+          var len = (derivedKeyType.length || 256) / 8;
+          var derivedBytes = pureHkdf(ikm, algorithm.salt, algorithm.info, len);
+          return this.importKey('raw', derivedBytes, derivedKeyType, extractable, keyUsages);
+        }
+        return Promise.reject(new Error('Unsupported deriveKey: ' + algName));
+      },
+
+      deriveBits: function(algorithm, baseKey, length) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'ECDH' && algorithm.public && baseKey._d) {
+          var peerPoint = algorithm.public._point;
+          if (!peerPoint) return Promise.reject(new Error('Missing peer public point'));
+          var S = ecPointMultiply(baseKey._d, peerPoint);
+          if (!S) return Promise.reject(new Error('Invalid shared point (infinity)'));
+          var sharedX = bigIntToU8(S.x, 32);
+          return Promise.resolve(sharedX.buffer.slice(0, 32));
+        }
+        if (algName === 'HKDF' && baseKey._ikm) {
+          var bytesLen = (length || 256) / 8;
+          var bits = pureHkdf(baseKey._ikm, algorithm.salt, algorithm.info, bytesLen);
+          return Promise.resolve(bits.buffer.slice(0, bytesLen));
+        }
+        return Promise.reject(new Error('Unsupported deriveBits: ' + algName));
+      },
+
+      encrypt: function(algorithm, key, data) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'AES-GCM' && key._key) {
+          try {
+            var enc = pureGcmEncrypt(key._key, algorithm.iv, data, algorithm.additionalData);
+            return Promise.resolve(enc.buffer.slice(0, enc.length));
+          } catch(e) { return Promise.reject(e); }
+        }
+        return Promise.reject(new Error('Unsupported encrypt algorithm: ' + algName));
+      },
+
+      decrypt: function(algorithm, key, data) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'AES-GCM' && key._key) {
+          try {
+            var dec = pureGcmDecrypt(key._key, algorithm.iv, data, algorithm.additionalData);
+            return Promise.resolve(dec.buffer.slice(0, dec.length));
+          } catch(e) { return Promise.reject(e); }
+        }
+        return Promise.reject(new Error('Unsupported decrypt algorithm: ' + algName));
+      },
+
+      digest: function(algorithm, data) {
+        var algName = typeof algorithm === 'string' ? algorithm : (algorithm && algorithm.name ? algorithm.name : '');
+        if (algName === 'SHA-256' || algName === 'sha-256') {
+          var hash = pureSha256(data);
+          return Promise.resolve(hash.buffer.slice(0, 32));
+        }
+        return Promise.reject(new Error('Unsupported digest: ' + algName));
+      },
+    };
+  }
 
   // ─── Fingerprint helper ──────────────────────────────────────────────────────
   function buildFingerprint() {
@@ -76,12 +617,12 @@
   function loadBoqNode() {
     var vm = require('vm');
     var https = require('https');
-    var nodeCrypto = require('crypto');
     var noop = function () {};
     var fp = buildFingerprint();
+    var pureSubtle = createPureSubtle();
 
     return new Promise(function (resolve, reject) {
-      https.get(BOQ_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } }, function (res) {
+      https.get(BOQ_URL, { headers: { 'User-Agent': USER_AGENT } }, function (res) {
         var chunks = [];
         res.on('data', function (d) { chunks.push(d); });
         res.on('end', function () {
@@ -93,7 +634,13 @@
 
             var sb = vm.createContext({
               console: console,
-              crypto: nodeCrypto.webcrypto,
+              crypto: {
+                subtle: pureSubtle,
+                getRandomValues: function (arr) {
+                  for (var i = 0; i < arr.length; i++) arr[i] = (Math.random() * 256) | 0;
+                  return arr;
+                },
+              },
               TextEncoder: TextEncoder, TextDecoder: TextDecoder,
               URL: URL, URLSearchParams: URLSearchParams,
               atob: pureAtob, btoa: pureBtoa,
@@ -110,7 +657,7 @@
                       'Accept': '*/*',
                       'Origin': 'https://cinejoy.to',
                       'Referer': 'https://cinejoy.to/',
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                      'User-Agent': USER_AGENT,
                     }, (opts && opts.headers) || {})
                   }, function (fRes) {
                     var rChunks = [];
@@ -146,7 +693,7 @@
               Uint8ClampedArray: Uint8ClampedArray,
               window: { location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to' }, navigator: { userAgent: '' }, addEventListener: noop },
               document: { querySelector: function () { return null; }, querySelectorAll: function () { return []; }, createElement: function () { return { style: {}, classList: { add: noop } }; }, cookie: '', currentScript: null, addEventListener: noop },
-              navigator: { userAgent: 'Mozilla/5.0', language: fp.lang, hardwareConcurrency: fp.hc },
+              navigator: { userAgent: USER_AGENT, language: fp.lang, hardwareConcurrency: fp.hc },
               location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
               history: { pushState: noop, replaceState: noop, state: null },
               customElements: { define: noop, get: function () { return null; } },
@@ -166,9 +713,6 @@
 
             resolve({
               Ax: vm.runInContext('typeof Ax !== "undefined" ? Ax : null', sb),
-              G0: vm.runInContext('typeof G0 !== "undefined" ? G0 : null', sb),
-              O0: vm.runInContext('typeof O0 !== "undefined" ? O0 : null', sb),
-              p0: vm.runInContext('typeof p0 !== "undefined" ? p0 : null', sb),
             });
           } catch (e) {
             reject(e);
@@ -181,16 +725,27 @@
   function loadBoqEval() {
     var noop = function () {};
     var fp = buildFingerprint();
+    var pureSubtle = createPureSubtle();
 
-    var realCrypto = (typeof crypto !== 'undefined' && crypto.subtle) ? crypto
-      : (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) ? window.crypto
-      : null;
+    var polyCrypto = {
+      subtle: pureSubtle,
+      getRandomValues: function (arr) {
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+          try { return crypto.getRandomValues(arr); } catch (e) {}
+        }
+        for (var i = 0; i < arr.length; i++) arr[i] = (Math.random() * 256) | 0;
+        return arr;
+      },
+    };
 
     var g = (typeof globalThis !== 'undefined') ? globalThis
       : (typeof global !== 'undefined') ? global
       : (typeof window !== 'undefined') ? window : {};
 
-    var _saved = {};
+    // Install persistent environment shims
+    if (!g.crypto || !g.crypto.subtle) g.crypto = polyCrypto;
+    if (typeof window !== 'undefined' && (!window.crypto || !window.crypto.subtle)) window.crypto = polyCrypto;
+
     var SHIMS = {
       HTMLElement: function HTMLElement() {},
       SVGElement: function SVGElement() {},
@@ -223,15 +778,18 @@
       },
       window: {
         location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
-        navigator: { userAgent: 'Mozilla/5.0', language: fp.lang, hardwareConcurrency: fp.hc, maxTouchPoints: fp.tp, onLine: true },
+        navigator: { userAgent: USER_AGENT, language: fp.lang, hardwareConcurrency: fp.hc, maxTouchPoints: fp.tp, onLine: true },
         addEventListener: noop, removeEventListener: noop, dispatchEvent: noop,
         history: { pushState: noop, replaceState: noop, state: null },
         screen: { width: fp.sw, height: fp.sh, colorDepth: fp.cd },
         devicePixelRatio: fp.dpr,
-        crypto: realCrypto,
+        crypto: polyCrypto,
         performance: { now: function () { return Date.now(); }, mark: noop, measure: noop },
         requestAnimationFrame: noop, cancelAnimationFrame: noop,
-        setTimeout: noop, clearTimeout: noop, setInterval: noop, clearInterval: noop,
+        setTimeout: typeof setTimeout !== 'undefined' ? setTimeout : noop,
+        clearTimeout: typeof clearTimeout !== 'undefined' ? clearTimeout : noop,
+        setInterval: typeof setInterval !== 'undefined' ? setInterval : noop,
+        clearInterval: typeof clearInterval !== 'undefined' ? clearInterval : noop,
       },
       location: { href: 'https://cinejoy.to/', hostname: 'cinejoy.to', origin: 'https://cinejoy.to', pathname: '/' },
       history: { pushState: noop, replaceState: noop, state: null },
@@ -241,260 +799,133 @@
       structuredClone: function (x) { return JSON.parse(JSON.stringify(x)); },
       atob: pureAtob,
       btoa: pureBtoa,
-      URL: typeof URL !== 'undefined' ? URL : null,
-      URLSearchParams: typeof URLSearchParams !== 'undefined' ? URLSearchParams : null,
-      TextEncoder: typeof TextEncoder !== 'undefined' ? TextEncoder : null,
-      TextDecoder: typeof TextDecoder !== 'undefined' ? TextDecoder : null,
-      crypto: realCrypto,
+      crypto: polyCrypto,
     };
 
-    var toRestore = [];
-    for (var k in SHIMS) {
-      if (Object.prototype.hasOwnProperty.call(SHIMS, k) && SHIMS[k] != null) {
-        try {
-          _saved[k] = g[k];
-          g[k] = SHIMS[k];
-          toRestore.push(k);
-        } catch (e) {}
+    Object.keys(SHIMS).forEach(function (k) {
+      if (typeof g[k] === 'undefined' || g[k] === null) {
+        try { g[k] = SHIMS[k]; } catch (e) {}
       }
-    }
+    });
 
-    function cleanup() {
-      for (var i = 0; i < toRestore.length; i++) {
-        var key = toRestore[i];
-        try {
-          if (typeof _saved[key] === 'undefined') {
-            delete g[key];
-          } else {
-            g[key] = _saved[key];
-          }
-        } catch (e) {}
-      }
-    }
-
-    return fetch(BOQ_URL, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' } })
-      .then(function (r) { return r.text(); })
+    return fetch(BOQ_URL, { headers: { 'User-Agent': USER_AGENT } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('BOqDcafn download failed: HTTP ' + res.status);
+        return res.text();
+      })
       .then(function (code) {
         var clean = code
           .replace(/import\{[^}]*\}from["'][^"']+["'];?/g, 'var X = {};')
           .replace(/export\{[^}]*\};?/g, '');
 
-        var exps = null;
-        try {
-          // eslint-disable-next-line no-new-func
-          var fn = new Function('module', 'exports',
-            clean + '\n' +
-            'return { ' +
-            '  Ax: typeof Ax !== "undefined" ? Ax : null, ' +
-            '  G0: typeof G0 !== "undefined" ? G0 : null, ' +
-            '  O0: typeof O0 !== "undefined" ? O0 : null, ' +
-            '  p0: typeof p0 !== "undefined" ? p0 : null ' +
-            '};'
-          );
-          var mod = { exports: {} };
-          exps = fn(mod, mod.exports);
-        } finally {
-          cleanup();
-        }
+        var fn = new Function(clean + '; return typeof Ax !== "undefined" ? Ax : null;');
+        var Ax = fn.call(g);
+        if (!Ax && typeof g.Ax !== 'undefined') Ax = g.Ax;
 
-        if (!exps || !exps.Ax) {
-          throw new Error('Failed to extract Ax from BOqDcafn bundle');
-        }
-
-        return exps;
-      })
-      .catch(function (e) {
-        cleanup();
-        throw e;
+        return { Ax: Ax };
       });
   }
 
-  function loadBoq() {
-    if (_boqPromise) return _boqPromise;
-    _boqPromise = (IS_NODE ? loadBoqNode() : loadBoqEval()).catch(function (e) {
-      _boqPromise = null;
-      throw e;
-    });
+  function getBoqBundle() {
+    if (!_boqPromise) {
+      _boqPromise = (IS_NODE ? loadBoqNode() : loadBoqEval()).catch(function (e) {
+        _boqPromise = null;
+        throw e;
+      });
+    }
     return _boqPromise;
   }
 
-  // ─── Subtitles ────────────────────────────────────────────────────────────────
-  function fetchSubtitles(tmdbId, isTv, season, episode) {
-    var type = isTv ? 'tv' : 'movie';
-    var url = SUBS_BASE + '/subtitles?type=' + type + '&tmdb=' + tmdbId;
-    if (isTv && season != null && episode != null) url += '&season=' + season + '&episode=' + episode;
-    return new Promise(function (resolve) {
-      var timer = setTimeout(function () { resolve([]); }, 6000);
-      fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Origin': 'https://cinejoy.to',
-          'Referer': 'https://cinejoy.to/',
-          'User-Agent': 'Mozilla/5.0'
-        }
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          clearTimeout(timer);
-          var list = (data && data.subtitles) || [];
-          resolve(list.map(function (s) {
-            return {
-              url: s.url,
-              lang: s.language || s.label || 'Unknown',
-              language: s.language || s.label || 'Unknown',
-              label: s.display || s.label || s.language || 'Unknown',
-              type: s.type || 'srt'
-            };
-          }));
-        })
-        .catch(function () {
-          clearTimeout(timer);
-          resolve([]);
-        });
-    });
+  // ─── Subtitles Helper ────────────────────────────────────────────────────────
+  function formatSubtitles(tracks) {
+    if (!Array.isArray(tracks) || !tracks.length) return [];
+    var subs = [];
+    for (var i = 0; i < tracks.length; i++) {
+      var t = tracks[i];
+      if (!t) continue;
+      var file = t.file || t.url || t.src || '';
+      if (!file) continue;
+      var label = t.label || t.name || t.language || t.lang || ('Subtitle ' + (i + 1));
+      var lang = t.lang || t.language || label;
+      if (file.indexOf('http') !== 0) {
+        file = SUBS_BASE + (file.indexOf('/') === 0 ? '' : '/') + file;
+      }
+      subs.push({ url: file, lang: lang, label: label });
+    }
+    return subs;
   }
 
-  // ─── Argument Parser ──────────────────────────────────────────────────────────
-  function parseArgs(args) {
-    var first = args[0];
-    if (typeof first === 'object' && first !== null) {
-      return {
-        tmdbId: first.tmdbId || first.tmdb || first.id,
-        imdbId: first.imdbId || first.imdb,
-        title: first.title || first.name,
-        year: first.year ? Number(first.year) : undefined,
-        isTv: Boolean(first.isTv || first.type === 'tv' || first.type === 2),
-        season: first.season != null ? Number(first.season) : undefined,
-        episode: first.episode != null ? Number(first.episode) : undefined,
-        server: first.server || first.preferredServer,
+  // ─── Primary Extract Function ─────────────────────────────────────────────────
+  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
+    try {
+      var bundle = await getBoqBundle();
+      if (!bundle || !bundle.Ax) {
+        console.warn(TAG + ' Ax master extractor not available in BOq bundle');
+        return null;
+      }
+
+      var mediaType = isTv ? 'tv' : 'movie';
+      var params = {
+        tmdbId: Number(tmdbId) || tmdbId,
+        imdbId: imdbId || '',
+        title: title || '',
+        year: year ? Number(year) : undefined,
       };
-    }
-    // Positional: (tmdbId, imdbId, title, isTv, season, episode, year)
-    return {
-      tmdbId: first,
-      imdbId: args[1],
-      title: args[2],
-      isTv: Boolean(args[3]),
-      season: args[4] != null ? Number(args[4]) : undefined,
-      episode: args[5] != null ? Number(args[5]) : undefined,
-      year: args[6] != null ? Number(args[6]) : undefined,
-    };
-  }
 
-  // ─── Main Extraction ──────────────────────────────────────────────────────────
-  function extractAsync() {
-    var params = parseArgs(arguments);
-    var tmdbId = params.tmdbId;
-    var isTv = params.isTv;
-    var season = params.season;
-    var episode = params.episode;
-    var imdbId = params.imdbId;
-    var title = params.title;
-    var year = params.year;
-    var preferredServer = params.server;
-
-    console.log(TAG, 'Extracting tmdb:', tmdbId, isTv ? '(TV s' + season + 'e' + episode + ')' : '(Movie)');
-    if (!tmdbId) {
-      return Promise.reject(new Error(TAG + ' Missing tmdbId'));
-    }
-
-    var mediaType = isTv ? 'tv' : 'movie';
-    var mediaPayload = {
-      tmdbId: tmdbId,
-      imdbId: imdbId,
-      title: title,
-      year: year,
-      season: season,
-      episode: episode,
-    };
-
-    return loadBoq().then(function (boq) {
-      if (!boq.Ax) {
-        throw new Error(TAG + ' Ax extractor not available');
+      if (isTv && season != null && episode != null) {
+        params.season = Number(season);
+        params.episode = Number(episode);
       }
 
-      console.log(TAG, 'Running Ax extractor for', mediaType, 'tmdbId=' + tmdbId);
-      return boq.Ax(mediaType, mediaPayload, function (status) {
+      console.log(TAG + ' Invoking native Ax for ' + mediaType + ' tmdb:' + tmdbId + (isTv ? (' S' + season + 'E' + episode) : ''));
+
+      var axPromise = bundle.Ax(mediaType, params, function (status) {
         if (status && status.provider) {
-          console.log(TAG, '[' + status.provider + ']', status.status || '', status.error || '');
+          console.log(TAG + ' Server [' + status.provider + ']: ' + status.status + (status.error ? (' (' + status.error + ')') : ''));
         }
-      }, preferredServer);
-    }).then(function (axResult) {
-      if (!axResult || !axResult.result || !axResult.result.url) {
-        throw new Error(TAG + ' No streams found for tmdbId=' + tmdbId);
-      }
-
-      var streamUrl = axResult.result.url;
-      var sourceType = axResult.result.sourceType || 'hls';
-      var directCaptions = axResult.result.captions || [];
-
-      // Find winning server name if reported in providers
-      var winningServer = 'Lisbon';
-      if (axResult.providers && axResult.providers.length) {
-        var found = axResult.providers.find(function (p) { return p && p.status === 'ok'; });
-        if (found && found.name) winningServer = found.name;
-      }
-
-      console.log(TAG, '✅ Ax found stream:', streamUrl.slice(0, 60) + '... (server: ' + winningServer + ')');
-
-      return fetchSubtitles(tmdbId, isTv, season, episode).then(function (remoteSubs) {
-        var formattedDirect = directCaptions.map(function (c) {
-          return {
-            url: c.url || c.src,
-            lang: c.language || c.lang || c.label || 'Unknown',
-            language: c.language || c.lang || c.label || 'Unknown',
-            label: c.label || c.language || 'Unknown',
-            type: 'vtt',
-          };
-        });
-
-        var combinedSubs = formattedDirect.concat(remoteSubs || []);
-
-        return {
-          url: streamUrl,
-          stream: streamUrl,
-          quality: 'Auto',
-          provider: 'CineJoy',
-          server: winningServer,
-          type: sourceType === 'hls' || streamUrl.indexOf('.m3u8') !== -1 ? 'hls' : 'mp4',
-          headers: {
-            Referer: 'https://cinejoy.to/',
-            Origin: 'https://cinejoy.to',
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36',
-          },
-          subtitles: combinedSubs,
-        };
       });
-    });
+
+      var timeoutPromise = new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('Ax extraction timeout (' + TIMEOUT_MS + 'ms)')); }, TIMEOUT_MS);
+      });
+
+      var res = await Promise.race([axPromise, timeoutPromise]);
+      if (!res || !res.result || !res.result.url) {
+        console.warn(TAG + ' Ax returned no playable stream (failure: ' + (res && res.failure) + ')');
+        return null;
+      }
+
+      var streamUrl = res.result.url;
+      var captions = formatSubtitles(res.result.captions || res.result.subtitles || []);
+
+      console.log(TAG + ' ✅ Stream extracted successfully: ' + streamUrl.substring(0, 60) + '... (' + captions.length + ' subs)');
+
+      return {
+        url: streamUrl,
+        quality: 'Auto',
+        provider: 'CineJoy',
+        headers: {
+          Referer: 'https://cinejoy.to/',
+          Origin: 'https://cinejoy.to',
+          'User-Agent': USER_AGENT,
+        },
+        subtitles: captions,
+      };
+    } catch (e) {
+      console.error(TAG + ' Extraction failed: ' + e.message);
+      return null;
+    }
   }
 
-  // Dual API: returns Promise AND calls callback
-  function extract() {
-    var args = Array.prototype.slice.call(arguments);
-    var cb = null;
-    if (args.length > 1 && typeof args[args.length - 1] === 'function') {
-      cb = args.pop();
-    } else if (typeof args[0] === 'object' && args[0] !== null && typeof args[0].callback === 'function') {
-      cb = args[0].callback;
-    }
-
-    var promise = extractAsync.apply(null, args);
-    if (typeof cb === 'function') {
-      promise.then(function (r) { cb(null, r); }).catch(function (e) { cb(e, null); });
-    }
-    return promise;
+  // ─── Module Export ────────────────────────────────────────────────────────────
+  var extractor = { extract: extract };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = extractor;
   }
-
-  // ─── Export ───────────────────────────────────────────────────────────────────
-  var extractor = {
-    name: 'CineJoy',
-    version: '3.4.0',
-    description: 'CineJoy lumen-gate-v1 native Ax sandbox (Lisbon/Solara/Athens/Joy/Castle)',
-    extract: extract,
-    fetchSubtitles: fetchSubtitles,
-  };
-
-  if (typeof module !== 'undefined' && module.exports) { module.exports = extractor; }
-  if (typeof window !== 'undefined') { window.CineJoyExtractor = extractor; }
-  if (typeof registerExtractor === 'function') { registerExtractor('cinejoy', extractor); }
+  var gObj = typeof globalThis !== 'undefined' ? globalThis
+    : typeof window !== 'undefined' ? window
+    : typeof global !== 'undefined' ? global : this;
+  if (gObj) {
+    gObj.CineJoyExtractor = extractor;
+  }
 })();

@@ -1,11 +1,11 @@
 /**
- * CineJoyExtractor v4.1.0 — Universal Remote Extractor for MasterStream.
+ * CineJoyExtractor v4.2.0 — Universal Remote Extractor for MasterStream.
  *
  * Architecture:
  * - Mobile / React Native (Hermes): Calls the backend CineJoy extraction API endpoint
  *   (Render cloud + local dev fallbacks) with zero JS engine friction.
  * - Node.js / Server environments: Uses native V8 VM execution of CineJoy bundle with
- *   auto-discovery and built-in WebCrypto for maximum extraction performance.
+ *   full auto-discovery of entry chunks & export aliases for maximum reliability.
  *
  * 100% JS/API based. No stream sniffer / WebView required.
  */
@@ -25,7 +25,7 @@
 
   // ─── Node.js Native Runner (used when running on backend server) ──────────────
   var _boqNodePromise = null;
-  var _cachedChunk = '_app/immutable/chunks/CGdZuRE1.js';
+  var _cachedChunk = null;
 
   function fetchTextNode(url) {
     var https = require('https');
@@ -50,7 +50,8 @@
     if (_cachedChunk) {
       var code = await fetchTextNode('https://cinejoy.to/' + _cachedChunk);
       if (code && code.indexOf('as s') !== -1 && code.indexOf('failure:') !== -1) {
-        return { path: _cachedChunk, code: code };
+        var m = code.match(/([a-zA-Z0-9_$]+)\s+as\s+s\b/);
+        if (m) return { path: _cachedChunk, code: code, masterVarName: m[1] };
       }
     }
     var html = await fetchTextNode('https://cinejoy.to/');
@@ -69,8 +70,11 @@
       var chunkPath = '_app/immutable/chunks/' + unique[j];
       var chunkCode = await fetchTextNode('https://cinejoy.to/' + chunkPath);
       if (chunkCode && chunkCode.indexOf('as s') !== -1 && chunkCode.indexOf('failure:') !== -1) {
-        _cachedChunk = chunkPath;
-        return { path: chunkPath, code: chunkCode };
+        var match = chunkCode.match(/([a-zA-Z0-9_$]+)\s+as\s+s\b/);
+        if (match) {
+          _cachedChunk = chunkPath;
+          return { path: chunkPath, code: chunkCode, masterVarName: match[1] };
+        }
       }
     }
     throw new Error('Could not find active CineJoy extractor chunk');
@@ -87,6 +91,7 @@
 
       var found = await discoverChunkNode();
       var code = found.code;
+      var masterVarName = found.masterVarName;
 
       var clean = code
         .replace(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*["'];?/g, function (_, imports) {
@@ -171,9 +176,9 @@
       sandbox.self = sandbox;
       sandbox.globalThis = sandbox;
 
-      var script = new vm.Script(clean + '\n; (typeof E0 !== "undefined" ? E0 : null);');
+      var script = new vm.Script(clean + '\n; (typeof ' + masterVarName + ' !== "undefined" ? ' + masterVarName + ' : null);');
       var masterAx = script.runInContext(sandbox, { timeout: 15000 });
-      if (!masterAx || typeof masterAx !== 'function') throw new Error('Master extractor function not found in CineJoy bundle');
+      if (!masterAx || typeof masterAx !== 'function') throw new Error('Master extractor function (' + masterVarName + ') not found in CineJoy bundle');
       return { Ax: masterAx };
     })();
 

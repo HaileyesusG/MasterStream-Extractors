@@ -221,6 +221,7 @@
             return {
               url: data.url,
               quality: data.quality || 'Auto',
+              qualities: data.qualities || [],
               provider: 'CineJoy',
               headers: data.headers || {
                 'Referer': 'https://cinejoy.to/',

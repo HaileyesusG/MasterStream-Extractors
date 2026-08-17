@@ -157,66 +157,71 @@ async function extractViaBackend(tmdbId, imdbId, isTv, season, episode) {
 }
 
 async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
+  // ── 1. If WebAssembly is available (Android TV V8 / Node), try direct extraction first ──
+  if (typeof WebAssembly !== 'undefined') {
+    try {
+      var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
+      var idParam;
+
+      if (imdbId && typeof imdbId === 'string' && imdbId.startsWith('tt')) {
+        idParam = 'imdb=' + encodeURIComponent(imdbId);
+      } else {
+        idParam = 'tmdb=' + encodeURIComponent(String(tmdbId));
+      }
+
+      var apiUrl = isTvShow
+        ? API_BASE + '?type=tv&' + idParam + '&season=' + (season || 1) + '&episode=' + (episode || 1) + '&stream_urls'
+        : API_BASE + '?type=movie&' + idParam + '&stream_urls';
+
+      var apiRes = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': REFERER,
+          'Origin': REFERER.replace(/\/+$/, ''),
+          'Accept': 'application/json',
+        },
+      });
+
+      if (apiRes.ok) {
+        var json = await apiRes.json();
+        if (json && json.data && json.data.stream_urls) {
+          var streamUrls = [];
+          if (typeof json.data.stream_urls === 'string' && json.vs) {
+            streamUrls = await decryptStreamUrls(json.vs, json.data.stream_urls);
+          } else if (Array.isArray(json.data.stream_urls)) {
+            streamUrls = json.data.stream_urls;
+          }
+
+          if (streamUrls && streamUrls.length > 0) {
+            var primaryUrl = streamUrls[0];
+            var token = await fetchStreamToken(primaryUrl);
+
+            var finalUrl = token
+              ? primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
+              : primaryUrl;
+
+            return {
+              url: finalUrl,
+              quality: 'Auto',
+              provider: 'LordFlix',
+              headers: {
+                'User-Agent': USER_AGENT,
+                'Referer': REFERER,
+                'Origin': REFERER.replace(/\/+$/, ''),
+              },
+              subtitles: [],
+            };
+          }
+        }
+      }
+    } catch (directErr) {
+      // Direct extraction failed (e.g. SSL Chain validation error on Android TV OkHttpClient) -> auto fallback to backend
+    }
+  }
+
+  // ── 2. Fallback: Backend Proxy (Node.js WASM + Client IP token) ────────────────────────
   try {
-    // ── Hermes (React Native) has no WebAssembly → use backend proxy ──────────
-    if (typeof WebAssembly === 'undefined') {
-      return await extractViaBackend(tmdbId, imdbId, isTv, season, episode);
-    }
-
-    // ── Android TV WebView / Node: run WASM decryption locally ────────────────
-    var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
-    var idParam;
-
-    if (imdbId && typeof imdbId === 'string' && imdbId.startsWith('tt')) {
-      idParam = 'imdb=' + encodeURIComponent(imdbId);
-    } else {
-      idParam = 'tmdb=' + encodeURIComponent(String(tmdbId));
-    }
-
-    var apiUrl = isTvShow
-      ? API_BASE + '?type=tv&' + idParam + '&season=' + (season || 1) + '&episode=' + (episode || 1) + '&stream_urls'
-      : API_BASE + '?type=movie&' + idParam + '&stream_urls';
-
-    var apiRes = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': REFERER,
-        'Origin': REFERER.replace(/\/+$/, ''),
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!apiRes.ok) return null;
-    var json = await apiRes.json();
-    if (!json || !json.data || !json.data.stream_urls) return null;
-
-    var streamUrls = [];
-    if (typeof json.data.stream_urls === 'string' && json.vs) {
-      streamUrls = await decryptStreamUrls(json.vs, json.data.stream_urls);
-    } else if (Array.isArray(json.data.stream_urls)) {
-      streamUrls = json.data.stream_urls;
-    }
-
-    if (!streamUrls || streamUrls.length === 0) return null;
-
-    var primaryUrl = streamUrls[0];
-    var token = await fetchStreamToken(primaryUrl);
-
-    var finalUrl = token
-      ? primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
-      : primaryUrl;
-
-    return {
-      url: finalUrl,
-      quality: 'Auto',
-      provider: 'LordFlix',
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': REFERER,
-        'Origin': REFERER.replace(/\/+$/, ''),
-      },
-      subtitles: [],
-    };
+    return await extractViaBackend(tmdbId, imdbId, isTv, season, episode);
   } catch (err) {
     return null;
   }

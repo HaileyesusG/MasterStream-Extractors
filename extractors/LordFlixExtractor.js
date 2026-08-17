@@ -79,10 +79,20 @@ async function decryptStreamUrls(vs, encryptedB64) {
   return text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
 }
 
+// In-memory token cache by origin (JWT is valid for 4 hours)
+var tokenCache = {};
+
 async function fetchStreamToken(streamUrl) {
   try {
     var u = new URL(streamUrl);
-    var tokenUrl = u.origin + '/generate.php';
+    var origin = u.origin;
+    var now = Math.floor(Date.now() / 1000);
+    var cached = tokenCache[origin];
+    if (cached && cached.token && cached.exp > now + 300) {
+      return cached.token;
+    }
+
+    var tokenUrl = origin + '/generate.php';
     var res = await fetch(tokenUrl, {
       headers: {
         'User-Agent': USER_AGENT,
@@ -91,14 +101,20 @@ async function fetchStreamToken(streamUrl) {
       },
     });
     if (!res.ok) return '';
-    var text = await res.text();
-    return text.trim();
+    var text = (await res.text()).trim();
+    if (!text || text.indexOf('eyJ') !== 0) return '';
+
+    tokenCache[origin] = {
+      token: text,
+      exp: now + 3.5 * 3600,
+    };
+    return text;
   } catch (e) {
     return '';
   }
 }
 
-/** Called when Hermes has no WebAssembly — delegates to our backend */
+/** Called when Hermes has no WebAssembly — delegates to backend for decryption, then mints token on client */
 async function extractViaBackend(tmdbId, imdbId, isTv, season, episode) {
   try {
     var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
@@ -115,11 +131,24 @@ async function extractViaBackend(tmdbId, imdbId, isTv, season, episode) {
     var data = await res.json();
     if (!data || !data.url) return null;
 
+    // Strip any server-minted token (tokens are bound to the client's IP)
+    var rawUrl = data.url.replace(/([?&])token=[^&]*/g, '').replace(/[?&]$/, '');
+
+    // Mint fresh token directly from the client device
+    var token = await fetchStreamToken(rawUrl);
+    var finalUrl = token
+      ? rawUrl + (rawUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
+      : rawUrl;
+
     return {
-      url: data.url,
+      url: finalUrl,
       quality: data.quality || 'Auto',
       provider: 'LordFlix',
-      headers: data.headers || { 'User-Agent': USER_AGENT, 'Referer': REFERER },
+      headers: data.headers || {
+        'User-Agent': USER_AGENT,
+        'Referer': REFERER,
+        'Origin': REFERER.replace(/\/+$/, ''),
+      },
       subtitles: data.subtitles || [],
     };
   } catch (e) {

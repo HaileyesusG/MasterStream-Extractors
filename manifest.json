@@ -1,5 +1,5 @@
 {
-    "version":  220,
+    "version":  221,
     "providerPriority":  [
                              "CineJoy",
                              "Videasy",
@@ -84,7 +84,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "2483F8D72FBE5A7815E8D565F46D02DE",
+                                       "hash":  "53E064F07408EC6BF92E8810721DC5F2",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

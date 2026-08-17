@@ -1,14 +1,14 @@
 {
-  "version": 133,
+  "version": 134,
   "providerPriority": [
     "LordFlix",
-    "VaPlayer",
+    "CineJoy",
     "Videasy",
-    "VidFast",
+    "VaPlayer",
     "VixSrc",
     "Vidlink",
     "VidSrcMe",
-    "CineJoy"
+    "VidFast"
   ],
   "Videasy": {
     "domain": "https://api.speedracelight.com",

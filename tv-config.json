@@ -1,8 +1,8 @@
 {
-  "version": 134,
+  "version": 135,
   "providerPriority": [
-    "LordFlix",
     "CineJoy",
+    "LordFlix",
     "Videasy",
     "VaPlayer",
     "VixSrc",

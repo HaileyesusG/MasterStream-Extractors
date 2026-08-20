@@ -1,9 +1,9 @@
 {
-  "version": 224,
+  "version": 225,
   "providerPriority": [
-    "LordFlix",
-    "VidVault",
     "CineJoy",
+    "VidVault",
+    "LordFlix",
     "Videasy",
     "VaPlayer",
     "VixSrc",

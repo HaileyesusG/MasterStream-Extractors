@@ -98,7 +98,7 @@
           return imports.split(',').map(function (seg) {
             var parts = seg.trim().split(/\s+as\s+/);
             var localName = (parts[1] || parts[0]).trim().replace(/[^a-zA-Z0-9_$]/g, '');
-            return localName ? 'var ' + localName + ' = (function(){ var fn = function(){}; fn.serverOrder=["Lisbon","Solara","Athens","Joy","Castle","Sakura","Canaias"]; fn.servers=[]; fn.providers=[]; fn.captions=[]; fn.audioTracks=[]; fn.qualities=[]; fn.sourceType="hls"; fn.url=""; fn.introSkip=null; fn.prototype={}; if(typeof Proxy!=="undefined"){return new Proxy(fn,{get:function(t,k){if(k in t)return t[k];return function(){};},apply:function(t,_,a){return t.apply(null,a);}});} return fn; })();' : '';
+            return localName ? 'var ' + localName + ' = (function(){ var fn = function(){}; fn.serverOrder=["Lisbon","Nebula","Solara","Athens","Joy","Castle","Sakura","Canaias"]; fn.servers=[]; fn.providers=[]; fn.captions=[]; fn.audioTracks=[]; fn.qualities=[]; fn.sourceType="hls"; fn.url=""; fn.introSkip=null; fn.prototype={}; if(typeof Proxy!=="undefined"){return new Proxy(fn,{get:function(t,k){if(k in t)return t[k];return function(){};},apply:function(t,_,a){return t.apply(null,a);}});} return fn; })();' : '';
           }).filter(Boolean).join(' ');
         })
         .replace(/export\s*\{[^}]*\}\s*;?/g, '');

@@ -1,8 +1,8 @@
 {
-    "version":  227,
+    "version":  228,
     "providerPriority":  [
                              "VidSrcCC",
-                             "VidVault",
+                             "",
                              "LordFlix",
                              "Videasy",
                              "VaPlayer",
@@ -10,7 +10,7 @@
                              "VidFast",
                              "OzTv",
                              "VidSrc",
-                             "",
+                             "VidVault",
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",

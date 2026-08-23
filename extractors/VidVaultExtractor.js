@@ -5,6 +5,7 @@
  */
 
 const BASE_URL = 'https://vidvault.ru/api';
+const BACKEND_URL = 'https://backendmasterstream.onrender.com/api/cinejoy/vidvault';
 const PRIMARY_WORKER = 'https://vlaq11.site';
 const SUBTITLE_WORKER = 'https://sub.k5s7sjozpn.workers.dev';
 
@@ -20,34 +21,88 @@ const MANDATORY_HEADERS = {
 async function extract(tmdbId, isTv, season, episode, title) {
   try {
     const type = isTv ? 'tv' : 'movie';
+    const safeTitle = encodeURIComponent(title || 'MasterStream_Download');
 
-    // Step 1: Request single-use token
-    const tokenRes = await fetch(`${BASE_URL}/get-token`, { headers: MANDATORY_HEADERS });
-    const tokenData = await tokenRes.json();
-    const token = tokenData?.t;
-    if (!token) return null;
+    // 1. Fetch active access pass from token pool
+    let accessPass = null;
+    try {
+      const passController = new AbortController();
+      const passTimer = setTimeout(() => passController.abort(), 3500);
+      const passRes = await fetch(`${BACKEND_URL}/pass`, {
+        signal: passController.signal,
+      });
+      clearTimeout(passTimer);
+      if (passRes.ok) {
+        const passData = await passRes.json();
+        if (passData?.pass) {
+          accessPass = passData.pass;
+        }
+      }
+    } catch (_) {}
 
-    // Step 2: Request download proxy
-    const body = { type, tmdbId };
-    if (isTv) {
-      body.season = season || 1;
-      body.episode = episode || 1;
-    }
+    // 2. Request single-use token from VidVault
+    let token = null;
+    try {
+      const tokenRes = await fetch(`${BASE_URL}/get-token`, { headers: MANDATORY_HEADERS });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        token = tokenData?.t;
+      }
+    } catch (_) {}
 
-    const proxyRes = await fetch(`${BASE_URL}/download-proxy`, {
-      method: 'POST',
-      headers: {
+    let data = null;
+
+    if (token) {
+      // 3. Request download proxy
+      const body = { type, tmdbId };
+      if (isTv) {
+        body.season = season || 1;
+        body.episode = episode || 1;
+      }
+
+      const headers = {
         'Content-Type': 'application/json',
         'x-request-token': token,
         ...MANDATORY_HEADERS,
-      },
-      body: JSON.stringify(body),
-    });
+      };
+      if (accessPass) {
+        headers['x-access-pass'] = accessPass;
+      }
 
-    const data = await proxyRes.json();
-    if (!data) return null;
+      try {
+        const proxyRes = await fetch(`${BASE_URL}/download-proxy`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
 
-    const safeTitle = encodeURIComponent(title || 'MasterStream_Download');
+        if (proxyRes.ok) {
+          data = await proxyRes.json();
+        }
+      } catch (_) {}
+    }
+
+    // 4. If direct extraction failed, try backend extraction fallback
+    if (!data) {
+      try {
+        let fallbackUrl = `${BACKEND_URL}/extract?tmdbId=${tmdbId}&type=${type}`;
+        if (isTv) {
+          fallbackUrl += `&season=${season || 1}&episode=${episode || 1}`;
+        }
+        if (title) {
+          fallbackUrl += `&title=${encodeURIComponent(title)}`;
+        }
+        const backRes = await fetch(fallbackUrl);
+        if (backRes.ok) {
+          const backData = await backRes.json();
+          if (backData?.ok && backData?.url) {
+            return backData;
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
     const mkvQualities = [];
     const mp4Qualities = [];
 
@@ -58,7 +113,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
       }
     };
 
-    // Step 3A: Parse MKVs (High Speed)
+    // Step 5A: Parse MKVs (High Speed)
     const mkvV3 = data?.mkvV3Data;
     const v3Files = Array.isArray(mkvV3) ? mkvV3 : Array.isArray(mkvV3?.files) ? mkvV3.files : mkvV3?.url ? [mkvV3] : [];
     v3Files.forEach(file => {
@@ -86,7 +141,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
       }
     });
 
-    // Step 3B: Parse MP4s (Fallback)
+    // Step 5B: Parse MP4s (Fallback)
     const mp4Data = data?.mp4Data;
     const downloadInfoData = mp4Data?.downloadInfo?.data || mp4Data?.data || data?.data;
     const downloads = downloadInfoData?.downloads || downloadInfoData?.streams || [];
@@ -105,7 +160,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
     const allQualities = mkvQualities.length > 0 ? mkvQualities : mp4Qualities;
     if (allQualities.length === 0) return null;
 
-    // Step 4: Parse Subtitles
+    // Step 6: Parse Subtitles
     const subtitles = [];
     const captions = downloadInfoData?.captions || [];
     captions.forEach(cap => {

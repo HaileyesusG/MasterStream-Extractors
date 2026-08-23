@@ -1,12 +1,12 @@
 {
-    "version":  247,
+    "version":  248,
     "providerPriority":  [
                              "CineJoy",
-                             "VidVault",
                              "Videasy",
-                             "VaPlayer",
                              "VidFast",
                              "VixSrc",
+                             "VidVault",
+                             "VaPlayer",
                              "VidSrcCC",
                              "OzTv",
                              "VidSrc",

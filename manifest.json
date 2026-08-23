@@ -1,16 +1,16 @@
 {
-    "version":  239,
+    "version":  244,
     "providerPriority":  [
                              "CineJoy",
-                             "VidSrcCC",
                              "VidVault",
                              "Videasy",
-                             "LordFlix",
-                             "VixSrc",
+                             "VaPlayer",
                              "VidFast",
+                             "VixSrc",
+                             "VidSrcCC",
                              "OzTv",
                              "VidSrc",
-                             "VaPlayer",
+                             "LordFlix",
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
@@ -84,7 +84,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "8279291925066BDA626E3F444ED251B7",
+                                       "hash":  "F6D51CBF9BFB5E5717BDBC60CC970841",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

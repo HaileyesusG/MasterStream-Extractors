@@ -63,20 +63,24 @@ async function extract(tmdbId, isTv, season, episode, title) {
               const nhdQualities = [];
               const rawSources = verifyData.sources;
 
-              // Filter for playable direct video URLs
+              // Filter specifically for direct playable CDN / worker streams
               const playable = rawSources.filter(function (s) {
                 if (!s || !s.url) return false;
                 const u = s.url;
-                if (u.includes('/drive/admin') || u.includes('pixeldrain.dev') || u.includes('hubcloud.cx/tg/')) return false;
+                if (
+                  u.includes('/drive/admin') ||
+                  u.includes('pixeldrain.dev') ||
+                  u.includes('hubcloud.cx/tg/') ||
+                  u.includes('itsnitrox.tech')
+                ) {
+                  return false;
+                }
                 return (
                   u.includes('workers.dev') ||
                   u.includes('r2.cloudflarestorage.com') ||
                   u.includes('googleusercontent') ||
                   u.includes('.mp4') ||
-                  u.includes('.mkv') ||
-                  u.includes('nitrox') ||
-                  u.includes('hakunaymatata') ||
-                  u.includes('hubcloud')
+                  u.includes('.mkv')
                 );
               });
 
@@ -216,7 +220,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
     const mkvFiles = Array.isArray(mkvData) ? mkvData : Array.isArray(mkvData && mkvData.files) ? mkvData.files : (mkvData && mkvData.url) ? [mkvData] : [];
     mkvFiles.forEach(function (file) {
       if (file && file.url) {
-        const qLabel = file.quality ? (file.quality.replace(/p$/i, '') + 'p (MKV)') : '480p (MKV)';
+        const qLabel = file.quality ? `${file.quality.replace(/p$/i, '')}p (MKV)` : '480p (MKV)';
         addQuality(mkvQualities, qLabel, file.url);
       }
     });

@@ -1,5 +1,5 @@
 {
-    "version":  233,
+    "version":  234,
     "providerPriority":  [
                              "CineJoy",
                              "VidSrcCC",
@@ -30,7 +30,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "B7D6CE24355815FA6DEC4D14C98054D4",
+                                       "hash":  "2235EE793F94AB074F9700768A076315",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

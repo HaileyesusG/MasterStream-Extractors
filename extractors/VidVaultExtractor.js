@@ -87,7 +87,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
               playable.forEach(function (item) {
                 const label = item.label || '';
                 let q = '1080p (MKV)';
-                if (label.includes('2160p') || label.includes('4K')) q = '4K (MKV)';
+                if (label.includes('2160p') || label.includes('4K')) q = '2160p (4K MKV)';
                 else if (label.includes('1080p') || label.includes('1080')) q = '1080p (MKV)';
                 else if (label.includes('720p') || label.includes('720')) q = '720p (MKV)';
                 else if (label.includes('480p') || label.includes('480')) q = '480p (MKV)';

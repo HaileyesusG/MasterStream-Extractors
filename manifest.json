@@ -1,5 +1,5 @@
 {
-    "version":  236,
+    "version":  237,
     "providerPriority":  [
                              "CineJoy",
                              "VidSrcCC",
@@ -30,7 +30,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "FBDB31ED73DA4BBEF9C5595706E86D2B",
+                                       "hash":  "2609F8E66E53547B12A06324D0724574",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -75,7 +75,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "15597F34BFCFB2C200AE7F12FFA35327",
+                                       "hash":  "36547DAA4E8D6C064611EAC9D525EBD4",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -84,7 +84,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "92E9813FFBCCB3F7FF87FCC2206FDA67",
+                                       "hash":  "F534FE0BF2079E82FFE043BC051E5274",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

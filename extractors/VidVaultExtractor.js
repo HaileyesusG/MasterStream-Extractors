@@ -1,7 +1,7 @@
 /**
  * VidVault / NHD Remote Extractor
  * Hybrid high-speed MKV & MP4 worker stream extractor.
- * Integrates direct NHD math solver + VidVault fallback.
+ * Integrates direct NHD math solver + parallel stream verification + VidVault fallback.
  * CommonJS format for MasterStream-Extractors GitHub repo.
  */
 
@@ -25,7 +25,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
     const type = isTv ? 'tv' : 'movie';
     const safeTitle = encodeURIComponent(title || 'MasterStream_Download');
 
-    // ─── ENGINE 1: NHD Direct Math Solver (Fastest, 0 Cost) ────────────────
+    // ─── ENGINE 1: NHD Direct Math Solver with Live Stream Pre-validation ───
     try {
       let nhdUrl = NHD_BASE + '/dl-captcha?mediaType=' + type + '&id=' + tmdbId;
       if (isTv) {
@@ -60,29 +60,55 @@ async function extract(tmdbId, isTv, season, episode, title) {
           if (verifyRes.ok) {
             const verifyData = await verifyRes.json();
             if (verifyData && verifyData.success && Array.isArray(verifyData.sources) && verifyData.sources.length > 0) {
-              const nhdQualities = [];
               const rawSources = verifyData.sources;
 
-              // Filter specifically for direct playable CDN / worker streams
-              const playable = rawSources.filter(function (s) {
+              // Filter out known static landing pages and HTML wrappers
+              const candidates = rawSources.filter(function (s) {
                 if (!s || !s.url) return false;
                 const u = s.url;
                 if (
                   u.includes('/drive/admin') ||
                   u.includes('pixeldrain.dev') ||
                   u.includes('hubcloud.cx/tg/') ||
-                  u.includes('itsnitrox.tech')
+                  u.includes('itsnitrox.tech') ||
+                  u.includes('pixel.hubcloud.cx') ||
+                  u.includes('gpdl.hubcloud.cx')
                 ) {
                   return false;
                 }
-                return (
-                  u.includes('workers.dev') ||
-                  u.includes('r2.cloudflarestorage.com') ||
-                  u.includes('googleusercontent') ||
-                  u.includes('.mp4') ||
-                  u.includes('.mkv')
-                );
+                return true;
               });
+
+              // Pre-validate all candidate streams in parallel (1.8s timeout)
+              // Only keep streams that return HTTP 200/206 (rejects 403 "Access Denied" and HTML error pages)
+              const validatedResults = await Promise.all(
+                candidates.map(async function (item) {
+                  try {
+                    const ctrl = new AbortController();
+                    const timer = setTimeout(function () { ctrl.abort(); }, 1800);
+                    const res = await fetch(item.url, {
+                      headers: {
+                        'User-Agent': DEFAULT_USER_AGENT,
+                        'Range': 'bytes=0-50',
+                      },
+                      signal: ctrl.signal,
+                    });
+                    clearTimeout(timer);
+                    const ct = res.headers.get('content-type') || '';
+                    if (
+                      (res.status === 200 || res.status === 206) &&
+                      !ct.includes('text/html') &&
+                      (ct.includes('video') || ct.includes('octet-stream') || ct.includes('matroska') || item.url.includes('.mkv') || item.url.includes('.mp4'))
+                    ) {
+                      return item;
+                    }
+                  } catch (_) {}
+                  return null;
+                })
+              );
+
+              const playable = validatedResults.filter(Boolean);
+              const nhdQualities = [];
 
               playable.forEach(function (item) {
                 const label = item.label || '';

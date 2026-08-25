@@ -113,64 +113,40 @@
     }
   }
 
-  // ─── Parse M3U8 Quality Variants (Client-side, Audio-Retained) ───────────────
+  var BACKEND_PLAYLIST_BASE = 'https://backendmasterstream.onrender.com/api/cinejoy/playlist';
+
+  // ─── Parse M3U8 Quality Variants (Dynamic Resolution Mapping) ────────────────
   function parseM3u8Qualities(masterUrl, m3u8Content) {
     var qualities = [{ quality: 'Auto', url: masterUrl }];
     if (!m3u8Content || typeof m3u8Content !== 'string') return qualities;
 
-    var audioLines = [];
-    var lines = m3u8Content.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (line.indexOf('#EXT-X-MEDIA:TYPE=AUDIO') === 0) {
-        audioLines.push(line);
-      }
-    }
+    var encodedMaster = encodeURIComponent(masterUrl);
+    var seen = { 'Auto': true };
 
+    var lines = m3u8Content.split('\n');
     for (var j = 0; j < lines.length; j++) {
       var sLine = lines[j].trim();
       if (sLine.indexOf('#EXT-X-STREAM-INF:') === 0) {
         var resMatch = sLine.match(/RESOLUTION=(\d+)x(\d+)/i);
-        var nextLine = (lines[j + 1] || '').trim();
-        if (nextLine && nextLine.indexOf('#') !== 0) {
-          var variantUrl = nextLine;
-          if (variantUrl.indexOf('http') !== 0) {
-            try {
-              variantUrl = new URL(variantUrl, masterUrl).href;
-            } catch (e) {
-              var base = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-              variantUrl = base + variantUrl;
-            }
-          }
-
+        if (resMatch) {
+          var height = parseInt(resMatch[2], 10);
           var qualityLabel = 'Auto';
-          if (resMatch) {
-            var height = parseInt(resMatch[2], 10);
-            if (height >= 2160) qualityLabel = '4K';
-            else if (height >= 1440) qualityLabel = '1440p';
-            else if (height >= 1080) qualityLabel = '1080p';
-            else if (height >= 720) qualityLabel = '720p';
-            else if (height >= 480) qualityLabel = '480p';
-            else if (height >= 360) qualityLabel = '360p';
-            else qualityLabel = height + 'p';
-          }
+          var resKey = '1080p';
+          if (height >= 2160) { qualityLabel = '4K'; resKey = '4k'; }
+          else if (height >= 1440) { qualityLabel = '1440p'; resKey = '1440p'; }
+          else if (height >= 1080) { qualityLabel = '1080p'; resKey = '1080p'; }
+          else if (height >= 720) { qualityLabel = '720p'; resKey = '720p'; }
+          else if (height >= 480) { qualityLabel = '480p'; resKey = '480p'; }
+          else if (height >= 360) { qualityLabel = '360p'; resKey = '360p'; }
+          else { qualityLabel = height + 'p'; resKey = height + 'p'; }
 
-          var miniMaster = '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n';
-          if (audioLines.length > 0) {
-            miniMaster += audioLines.join('\n') + '\n';
+          if (!seen[qualityLabel]) {
+            seen[qualityLabel] = true;
+            qualities.push({
+              quality: qualityLabel,
+              url: BACKEND_PLAYLIST_BASE + '?res=' + resKey + '&master=' + encodedMaster,
+            });
           }
-          miniMaster += sLine + '\n' + variantUrl + '\n';
-
-          var bytes = new Uint8Array(miniMaster.length);
-          for (var k = 0; k < miniMaster.length; k++) {
-            bytes[k] = miniMaster.charCodeAt(k);
-          }
-          var dataUri = 'data:application/vnd.apple.mpegurl;base64,' + base64url_encode(bytes).replace(/-/g, '+').replace(/_/g, '/');
-
-          qualities.push({
-            quality: qualityLabel,
-            url: dataUri,
-          });
         }
       }
     }

@@ -1,5 +1,5 @@
 /**
- * CineJoyExtractor v5.2.0 — Zero-Backend Remote Extractor for MasterStream.
+ * CineJoyExtractor v5.3.0 — Zero-Backend Remote Extractor with Dynamic Multi-Quality Support.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/CineJoyExtractor.js
  * Works out-of-the-box on Mobile App (React Native Hermes) and Native TV App (Android WebView).
  *
@@ -9,8 +9,9 @@
  * 3. Encrypts request via enc-dec.app Lumen Gate v2: /api/enc-cinejoy
  * 4. Passes binary payload to https://api.shegu.st/g
  * 5. Decrypts response via enc-dec.app: /api/dec-cinejoy
- * 6. Validates stream URL live in JS (<100ms range ping) before returning to player
- *    — If dead link is returned, automatically cascades to next server in sequence!
+ * 6. Validates master playlist live in JS (<100ms) and parses all available qualities (Auto, 4K, 1080p, 720p, 360p)
+ *    preserving audio synchronization without any backend proxy!
+ *    — If dead link is returned, automatically cascades to next server in sequence.
  */
 (function () {
   'use strict';
@@ -89,27 +90,92 @@
     }
   }
 
-  // ─── Stream Validation (client-side ping, zero backend) ──────────────────────
-  async function validateStreamUrl(url) {
+  // ─── Stream Validation & Content Fetching ───────────────────────────────────
+  async function validateAndFetchPlaylist(url) {
     try {
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
       var res = await fetch(url, {
         method: 'GET',
-        headers: Object.assign({}, FETCH_HEADERS, { Range: 'bytes=0-1024' }),
+        headers: FETCH_HEADERS,
         redirect: 'follow',
         signal: controller ? controller.signal : undefined,
       });
       if (timeoutId) clearTimeout(timeoutId);
-      if (!res.ok) return false;
+      if (!res.ok) return { ok: false, content: '' };
       var text = await res.text();
       if (text.indexOf('Invalid token') !== -1 || text.indexOf('404 Not Found') !== -1) {
-        return false;
+        return { ok: false, content: '' };
       }
-      return text.indexOf('#EXTM3U') !== -1 || text.length > 0;
+      return { ok: text.indexOf('#EXTM3U') !== -1 || text.length > 0, content: text };
     } catch (e) {
-      return false;
+      return { ok: false, content: '' };
     }
+  }
+
+  // ─── Parse M3U8 Quality Variants (Client-side, Audio-Retained) ───────────────
+  function parseM3u8Qualities(masterUrl, m3u8Content) {
+    var qualities = [{ quality: 'Auto', url: masterUrl }];
+    if (!m3u8Content || typeof m3u8Content !== 'string') return qualities;
+
+    var audioLines = [];
+    var lines = m3u8Content.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line.indexOf('#EXT-X-MEDIA:TYPE=AUDIO') === 0) {
+        audioLines.push(line);
+      }
+    }
+
+    for (var j = 0; j < lines.length; j++) {
+      var sLine = lines[j].trim();
+      if (sLine.indexOf('#EXT-X-STREAM-INF:') === 0) {
+        var resMatch = sLine.match(/RESOLUTION=(\d+)x(\d+)/i);
+        var nextLine = (lines[j + 1] || '').trim();
+        if (nextLine && nextLine.indexOf('#') !== 0) {
+          var variantUrl = nextLine;
+          if (variantUrl.indexOf('http') !== 0) {
+            try {
+              variantUrl = new URL(variantUrl, masterUrl).href;
+            } catch (e) {
+              var base = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+              variantUrl = base + variantUrl;
+            }
+          }
+
+          var qualityLabel = 'Auto';
+          if (resMatch) {
+            var height = parseInt(resMatch[2], 10);
+            if (height >= 2160) qualityLabel = '4K';
+            else if (height >= 1440) qualityLabel = '1440p';
+            else if (height >= 1080) qualityLabel = '1080p';
+            else if (height >= 720) qualityLabel = '720p';
+            else if (height >= 480) qualityLabel = '480p';
+            else if (height >= 360) qualityLabel = '360p';
+            else qualityLabel = height + 'p';
+          }
+
+          var miniMaster = '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n';
+          if (audioLines.length > 0) {
+            miniMaster += audioLines.join('\n') + '\n';
+          }
+          miniMaster += sLine + '\n' + variantUrl + '\n';
+
+          var bytes = new Uint8Array(miniMaster.length);
+          for (var k = 0; k < miniMaster.length; k++) {
+            bytes[k] = miniMaster.charCodeAt(k);
+          }
+          var dataUri = 'data:application/vnd.apple.mpegurl;base64,' + base64url_encode(bytes).replace(/-/g, '+').replace(/_/g, '/');
+
+          qualities.push({
+            quality: qualityLabel,
+            url: dataUri,
+          });
+        }
+      }
+    }
+
+    return qualities;
   }
 
   // ─── Server Prioritization ──────────────────────────────────────────────────
@@ -224,13 +290,15 @@
           continue;
         }
 
-        // Step E: Client-side validation (<100ms)
-        console.log(TAG + ' [' + server + '] Validating stream: ' + streamUrl.slice(0, 60) + '...');
-        var isValid = await validateStreamUrl(streamUrl);
-        if (!isValid) {
+        // Step E: Client-side validation & Quality parsing
+        console.log(TAG + ' [' + server + '] Validating stream & parsing qualities: ' + streamUrl.slice(0, 60) + '...');
+        var valResult = await validateAndFetchPlaylist(streamUrl);
+        if (!valResult.ok) {
           console.warn(TAG + ' [' + server + '] ⚠️ Stream is dead/unplayable, cascading to next server...');
           continue;
         }
+
+        var qualities = parseM3u8Qualities(streamUrl, valResult.content);
 
         // Step F: Format subtitles
         var subtitles = [];
@@ -248,12 +316,13 @@
           }
         }
 
-        console.log(TAG + ' [' + server + '] ✅ Verified playable stream found: ' + streamUrl.slice(0, 60) + '... (' + subtitles.length + ' subs)');
+        var qualityNames = qualities.map(function (q) { return q.quality; }).join(', ');
+        console.log(TAG + ' [' + server + '] ✅ Verified stream found with qualities [' + qualityNames + '] (' + subtitles.length + ' subs)');
 
         return {
           url: streamUrl,
           quality: 'Auto',
-          qualities: [{ quality: 'Auto', url: streamUrl }],
+          qualities: qualities,
           provider: 'CineJoy (' + server + ')',
           headers: {
             'Referer': 'https://cinejoy.to/',

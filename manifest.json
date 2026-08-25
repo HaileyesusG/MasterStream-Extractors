@@ -1,5 +1,5 @@
 {
-  "version": 249,
+  "version": 250,
   "providerPriority": [
     "CineJoy",
     "VidVault",
@@ -20,7 +20,7 @@
   "providers": {
     "CineJoy": {
       "file": "extractors/CineJoyExtractor.js",
-      "hash": "AA3286BF3EC8E72A37513618204C7A65",
+      "hash": "90EAEE9B0537F979CAC1BA755CD35855",
       "webBaseUrl": "https://cinejoy.to/",
       "nativeMode": false,
       "mediaTypes": [

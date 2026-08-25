@@ -75,19 +75,50 @@
     }
   }
 
-  async function fetchBinary(url, buffer) {
-    try {
-      var res = await fetch(url, {
+  function fetchBinary(url, buffer) {
+    return new Promise(function (resolve) {
+      try {
+        if (typeof XMLHttpRequest !== 'undefined') {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', url, true);
+          xhr.responseType = 'arraybuffer';
+          xhr.setRequestHeader('Accept', '*/*');
+          xhr.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
+              resolve(new Uint8Array(xhr.response));
+            } else {
+              resolve(null);
+            }
+          };
+          xhr.onerror = function () {
+            resolve(null);
+          };
+          xhr.ontimeout = function () {
+            resolve(null);
+          };
+          xhr.timeout = 10000;
+          xhr.send(buffer);
+          return;
+        }
+      } catch (e) {}
+
+      fetch(url, {
         method: 'POST',
         headers: Object.assign({}, FETCH_HEADERS, { 'Content-Type': 'text/plain;charset=UTF-8' }),
         body: buffer,
+      }).then(function (res) {
+        if (!res.ok) return resolve(null);
+        if (typeof res.arrayBuffer === 'function') {
+          return res.arrayBuffer().then(function (ab) {
+            resolve(new Uint8Array(ab));
+          });
+        }
+        resolve(null);
+      }).catch(function () {
+        resolve(null);
       });
-      if (!res.ok) return null;
-      var ab = await res.arrayBuffer();
-      return new Uint8Array(ab);
-    } catch (e) {
-      return null;
-    }
+    });
   }
 
   // ─── Stream Validation + Content Fetch (client-side, zero backend) ───────────

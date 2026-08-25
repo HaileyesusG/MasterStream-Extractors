@@ -20,7 +20,7 @@
   "providers": {
     "CineJoy": {
       "file": "extractors/CineJoyExtractor.js",
-      "hash": "B96ACAE1E76DE695CD933DB0B61FD655",
+      "hash": "302E5D6DB85D958C750E14F3A133E30D",
       "webBaseUrl": "https://cinejoy.to/",
       "nativeMode": false,
       "mediaTypes": [

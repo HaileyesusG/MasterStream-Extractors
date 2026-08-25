@@ -90,27 +90,78 @@
     }
   }
 
-  // ─── Stream Validation (client-side ping, zero backend) ──────────────────────
-  async function validateStreamUrl(url) {
+  // ─── Stream Validation + Content Fetch (client-side, zero backend) ───────────
+  async function validateAndFetchPlaylist(url) {
     try {
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
       var res = await fetch(url, {
         method: 'GET',
-        headers: Object.assign({}, FETCH_HEADERS, { Range: 'bytes=0-1024' }),
+        headers: FETCH_HEADERS,
         redirect: 'follow',
         signal: controller ? controller.signal : undefined,
       });
       if (timeoutId) clearTimeout(timeoutId);
-      if (!res.ok) return false;
+      if (!res.ok) return { ok: false, content: '' };
       var text = await res.text();
       if (text.indexOf('Invalid token') !== -1 || text.indexOf('404 Not Found') !== -1) {
-        return false;
+        return { ok: false, content: '' };
       }
-      return text.indexOf('#EXTM3U') !== -1 || text.length > 0;
+      return { ok: text.indexOf('#EXTM3U') !== -1 || text.length > 0, content: text };
     } catch (e) {
-      return false;
+      return { ok: false, content: '' };
     }
+  }
+
+  // ─── Parse M3U8 Quality Variants → backend playlist proxy URLs ───────────────
+  //
+  // WHY backend URLs?
+  //   CineJoy uses DEMUXED HLS: video tracks and audio tracks are in separate files.
+  //   The Master Playlist binds them. A variant like video_1080p.m3u8 contains only
+  //   video frames. Without audio the player plays video silently.
+  //   The backend /api/cinejoy/playlist endpoint fetches the master, filters it to
+  //   the requested resolution, and re-serves a mini-master (~400 bytes of text)
+  //   that includes BOTH the audio group + the selected video variant.
+  //   All actual video and audio bytes stream directly CDN→device — the backend
+  //   never proxies media data. Cost: ~400 bytes of text per quality switch.
+  //
+  var BACKEND_PLAYLIST_BASE = 'https://backendmasterstream.onrender.com/api/cinejoy/playlist';
+
+  function parseM3u8Qualities(masterUrl, m3u8Content) {
+    var qualities = [{ quality: 'Auto', url: masterUrl }];
+    if (!m3u8Content || typeof m3u8Content !== 'string') return qualities;
+
+    var encodedMaster = encodeURIComponent(masterUrl);
+    var seen = { 'Auto': true };
+
+    var lines = m3u8Content.split('\n');
+    for (var j = 0; j < lines.length; j++) {
+      var sLine = lines[j].trim();
+      if (sLine.indexOf('#EXT-X-STREAM-INF:') === 0) {
+        var resMatch = sLine.match(/RESOLUTION=(\d+)x(\d+)/i);
+        if (resMatch) {
+          var height = parseInt(resMatch[2], 10);
+          var qualityLabel = 'Auto';
+          var resKey = '1080p';
+          if (height >= 2160) { qualityLabel = '4K'; resKey = '4k'; }
+          else if (height >= 1440) { qualityLabel = '1440p'; resKey = '1440p'; }
+          else if (height >= 1080) { qualityLabel = '1080p'; resKey = '1080p'; }
+          else if (height >= 720) { qualityLabel = '720p'; resKey = '720p'; }
+          else if (height >= 480) { qualityLabel = '480p'; resKey = '480p'; }
+          else if (height >= 360) { qualityLabel = '360p'; resKey = '360p'; }
+          else { qualityLabel = height + 'p'; resKey = height + 'p'; }
+
+          if (!seen[qualityLabel]) {
+            seen[qualityLabel] = true;
+            qualities.push({
+              quality: qualityLabel,
+              url: BACKEND_PLAYLIST_BASE + '?res=' + resKey + '&master=' + encodedMaster,
+            });
+          }
+        }
+      }
+    }
+    return qualities;
   }
 
   // ─── Server Prioritization ──────────────────────────────────────────────────
@@ -225,13 +276,15 @@
           continue;
         }
 
-        // Step E: Client-side validation (<100ms)
-        console.log(TAG + ' [' + server + '] Validating stream: ' + streamUrl.slice(0, 60) + '...');
-        var isValid = await validateStreamUrl(streamUrl);
-        if (!isValid) {
+        // Step E: Client-side validation & dynamic quality resolution mapping
+        console.log(TAG + ' [' + server + '] Validating stream & parsing qualities: ' + streamUrl.slice(0, 60) + '...');
+        var valResult = await validateAndFetchPlaylist(streamUrl);
+        if (!valResult.ok) {
           console.warn(TAG + ' [' + server + '] ⚠️ Stream is dead/unplayable, cascading to next server...');
           continue;
         }
+
+        var qualities = parseM3u8Qualities(streamUrl, valResult.content);
 
         // Step F: Format subtitles
         var subtitles = [];
@@ -249,12 +302,13 @@
           }
         }
 
-        console.log(TAG + ' [' + server + '] ✅ Verified playable master stream found: ' + streamUrl.slice(0, 60) + '... (' + subtitles.length + ' subs)');
+        var qualityNames = qualities.map(function (q) { return q.quality; }).join(', ');
+        console.log(TAG + ' [' + server + '] ✅ Verified stream found with qualities [' + qualityNames + '] (' + subtitles.length + ' subs)');
 
         return {
           url: streamUrl,
           quality: 'Auto',
-          qualities: [],  // Empty → WebViewPlayer calls M3U8ExtractorService.parseM3U8Playlist() → extracts all variants (Auto, 4K, 1080p, 720p, 360p)
+          qualities: qualities,
           provider: 'CineJoy (' + server + ')',
           headers: {
             'Referer': 'https://cinejoy.to/',

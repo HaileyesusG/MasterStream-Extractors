@@ -254,7 +254,7 @@
         return {
           url: streamUrl,
           quality: 'Auto',
-          qualities: [{ quality: 'Auto', url: streamUrl }],
+          qualities: [],  // Empty → WebViewPlayer calls M3U8ExtractorService.parseM3U8Playlist() → extracts all variants (Auto, 4K, 1080p, 720p, 360p)
           provider: 'CineJoy (' + server + ')',
           headers: {
             'Referer': 'https://cinejoy.to/',

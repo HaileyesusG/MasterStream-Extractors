@@ -1,119 +1,119 @@
 {
-    "version":  248,
-    "providerPriority":  [
-                             "CineJoy",
-                             "Videasy",
-                             "VidFast",
-                             "VixSrc",
-                             "VidVault",
-                             "VaPlayer",
-                             "VidSrcCC",
-                             "OzTv",
-                             "VidSrc",
-                             "LordFlix",
-                             "MyFlixerz",
-                             "VidlinkSniffer",
-                             "VidApi",
-                             "VidSrcMe",
-                             "Vidlink"
-                         ],
-    "providers":  {
-                      "CineJoy":  {
-                                      "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "E7A360C8565E805AFBAA43813528EED1",
-                                      "webBaseUrl":  "https://cinejoy.to/",
-                                      "nativeMode":  false,
-                                      "mediaTypes":  [
-                                                         "movie",
-                                                         "tv"
-                                                     ]
-                                  },
-                      "VidVault":  {
-                                       "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "2609F8E66E53547B12A06324D0724574",
-                                       "nativeMode":  false,
-                                       "mediaTypes":  [
-                                                          "movie",
-                                                          "tv"
-                                                      ]
-                                   },
-                      "Videasy":  {
-                                      "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "041B1A15EA692D3A0A369A99114663BA",
-                                      "nativeMode":  false,
-                                      "mediaTypes":  [
-                                                         "movie",
-                                                         "tv"
-                                                     ]
-                                  },
-                      "VidFast":  {
-                                      "file":  "extractors/VidFastExtractor.js",
-                                      "hash":  "638F5471BA9F3DC41DC37CA11C523B7C",
-                                      "nativeMode":  false,
-                                      "mediaTypes":  [
-                                                         "movie",
-                                                         "tv"
-                                                     ]
-                                  },
-                      "Vidlink":  {
-                                      "file":  "extractors/VidlinkExtractor.js",
-                                      "hash":  "53A4A4CA71C84FEE74915DED01A33227",
-                                      "nativeMode":  false,
-                                      "mediaTypes":  [
-                                                         "movie",
-                                                         "tv"
-                                                     ]
-                                  },
-                      "VixSrc":  {
-                                     "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "3580CF2D9CEC05A1EB42A6C3C26115E3",
-                                     "nativeMode":  false,
-                                     "mediaTypes":  [
-                                                        "movie",
-                                                        "tv"
-                                                    ]
-                                 },
-                      "VidSrcCC":  {
-                                       "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "36547DAA4E8D6C064611EAC9D525EBD4",
-                                       "nativeMode":  false,
-                                       "mediaTypes":  [
-                                                          "movie",
-                                                          "tv"
-                                                      ]
-                                   },
-                      "LordFlix":  {
-                                       "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "F6D51CBF9BFB5E5717BDBC60CC970841",
-                                       "mediaTypes":  [
-                                                          "movie",
-                                                          "tv"
-                                                      ]
-                                   },
-                      "VidSrc":  {
-                                     "file":  "extractors/VidSrcExtractor.js",
-                                     "hash":  "C1E58FDBCCB3B943C64AD3692081E181",
-                                     "mediaTypes":  [
-                                                        "movie",
-                                                        "tv"
-                                                    ]
-                                 },
-                      "OzTv":  {
-                                   "file":  "extractors/OzTvExtractor.js",
-                                   "hash":  "DF167BAC5D82915D5A274EC734347108",
-                                   "mediaTypes":  [
-                                                      "movie",
-                                                      "tv"
-                                                  ]
-                               },
-                      "VidSrcMe":  {
-                                       "file":  "extractors/VidSrcMeExtractor.js",
-                                       "hash":  "C4AD0AEDB9BE15B9E5FB7EC133D61075",
-                                       "nativeMode":  false,
-                                       "mediaTypes":  [
-                                                          "movie",
-                                                          "tv"
-                                                      ]
-                                   }
-                  }
+  "version": 249,
+  "providerPriority": [
+    "CineJoy",
+    "VidVault",
+    "Videasy",
+    "VaPlayer",
+    "VidFast",
+    "VixSrc",
+    "VidSrcCC",
+    "OzTv",
+    "VidSrc",
+    "LordFlix",
+    "MyFlixerz",
+    "VidlinkSniffer",
+    "VidApi",
+    "VidSrcMe",
+    "Vidlink"
+  ],
+  "providers": {
+    "CineJoy": {
+      "file": "extractors/CineJoyExtractor.js",
+      "hash": "AA3286BF3EC8E72A37513618204C7A65",
+      "webBaseUrl": "https://cinejoy.to/",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VidVault": {
+      "file": "extractors/VidVaultExtractor.js",
+      "hash": "2609F8E66E53547B12A06324D0724574",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "Videasy": {
+      "file": "extractors/VideasyExtractor.js",
+      "hash": "041B1A15EA692D3A0A369A99114663BA",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VidFast": {
+      "file": "extractors/VidFastExtractor.js",
+      "hash": "638F5471BA9F3DC41DC37CA11C523B7C",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "Vidlink": {
+      "file": "extractors/VidlinkExtractor.js",
+      "hash": "53A4A4CA71C84FEE74915DED01A33227",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VixSrc": {
+      "file": "extractors/VixSrcExtractor.js",
+      "hash": "3580CF2D9CEC05A1EB42A6C3C26115E3",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VidSrcCC": {
+      "file": "extractors/VidSrcCCExtractor.js",
+      "hash": "36547DAA4E8D6C064611EAC9D525EBD4",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "LordFlix": {
+      "file": "extractors/LordFlixExtractor.js",
+      "hash": "F6D51CBF9BFB5E5717BDBC60CC970841",
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VidSrc": {
+      "file": "extractors/VidSrcExtractor.js",
+      "hash": "C1E58FDBCCB3B943C64AD3692081E181",
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "OzTv": {
+      "file": "extractors/OzTvExtractor.js",
+      "hash": "DF167BAC5D82915D5A274EC734347108",
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    },
+    "VidSrcMe": {
+      "file": "extractors/VidSrcMeExtractor.js",
+      "hash": "C4AD0AEDB9BE15B9E5FB7EC133D61075",
+      "nativeMode": false,
+      "mediaTypes": [
+        "movie",
+        "tv"
+      ]
+    }
+  }
 }

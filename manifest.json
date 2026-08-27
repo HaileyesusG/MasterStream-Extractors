@@ -1,11 +1,11 @@
 {
-    "version":  258,
+    "version":  259,
     "providerPriority":  [
                              "CineJoy",
-                             "VidVault",
                              "Videasy",
-                             "VaPlayer",
                              "VidFast",
+                             "VidVault",
+                             "VaPlayer",
                              "VixSrc",
                              "VidSrcCC",
                              "OzTv",
@@ -30,7 +30,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "BB9B398F74E97634CC7BA70EF34E9277",
+                                       "hash":  "F87AEA903FFADF05559EF409CD3A352F",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

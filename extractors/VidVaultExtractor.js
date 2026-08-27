@@ -1,7 +1,10 @@
 /**
  * VidVault / NHD Remote Extractor
  * Hybrid high-speed MKV & MP4 worker stream extractor.
- * Integrates direct NHD math solver + parallel stream verification + VidVault fallback.
+ * 1. Direct NHD math solver + parallel stream pre-validation
+ * 2. Native Android WebView Bridge (Cloudflare Turnstile Auto-Solver)
+ * 3. VidVault token proxy with backend pass fallback
+ * 4. Backend fallback
  * CommonJS format for MasterStream-Extractors GitHub repo.
  */
 
@@ -79,8 +82,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
                 return true;
               });
 
-              // Pre-validate all candidate streams in parallel (1.8s timeout)
-              // Only keep streams that return HTTP 200/206 (rejects 403 "Access Denied" and HTML error pages)
+              // Pre-validate candidate streams in parallel (1.8s timeout)
               const validatedResults = await Promise.all(
                 candidates.map(async function (item) {
                   try {
@@ -98,12 +100,14 @@ async function extract(tmdbId, isTv, season, episode, title) {
                     if (
                       (res.status === 200 || res.status === 206) &&
                       !ct.includes('text/html') &&
-                      (ct.includes('video') || ct.includes('octet-stream') || ct.includes('matroska') || item.url.includes('.mkv') || item.url.includes('.mp4'))
+                      !ct.includes('application/json')
                     ) {
                       return item;
                     }
-                  } catch (_) {}
-                  return null;
+                    return null;
+                  } catch (_) {
+                    return null;
+                  }
                 })
               );
 
@@ -152,53 +156,69 @@ async function extract(tmdbId, isTv, season, episode, title) {
       }
     } catch (_) {}
 
-    // ─── ENGINE 2: VidVault Direct Token Proxy ──────────────────────────────
-    let accessPass = null;
-    try {
-      const passRes = await fetch(BACKEND_URL + '/pass');
-      if (passRes.ok) {
-        const passData = await passRes.json();
-        if (passData && passData.pass) accessPass = passData.pass;
-      }
-    } catch (_) {}
-
-    let token = null;
-    try {
-      const tokenRes = await fetch(VIDVAULT_BASE + '/get-token', { headers: MANDATORY_HEADERS });
-      if (tokenRes.ok) {
-        const tokenData = await tokenRes.json();
-        token = tokenData && tokenData.t;
-      }
-    } catch (_) {}
-
+    // ─── ENGINE 2: Native Android WebView Bridge (Zero Server Dependency) ──
     let data = null;
-    if (token) {
-      const body = { type: type, tmdbId: tmdbId };
-      if (isTv) {
-        body.season = season || 1;
-        body.episode = episode || 1;
+    try {
+      if (typeof NativeModules !== 'undefined' && NativeModules && NativeModules.StreamSniffer && typeof NativeModules.StreamSniffer.sniffJson === 'function') {
+        const vidvaultPageUrl = isTv
+          ? 'https://vidvault.ru/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
+          : 'https://vidvault.ru/movie/' + tmdbId;
+
+        const jsonStr = await NativeModules.StreamSniffer.sniffJson(vidvaultPageUrl, 'download-proxy', 25000);
+        if (jsonStr) {
+          data = JSON.parse(jsonStr);
+        }
       }
+    } catch (_) {}
 
-      const headers = {
-        'Content-Type': 'application/json',
-        'x-request-token': token,
-        'User-Agent': DEFAULT_USER_AGENT,
-        'Referer': 'https://vidvault.ru/',
-        'Origin': 'https://vidvault.ru',
-      };
-      if (accessPass) headers['x-access-pass'] = accessPass;
-
+    // ─── ENGINE 3: VidVault Direct Token Proxy ──────────────────────────────
+    if (!data) {
+      let accessPass = null;
       try {
-        const proxyRes = await fetch(VIDVAULT_BASE + '/download-proxy', {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(body),
-        });
-        if (proxyRes.ok) data = await proxyRes.json();
+        const passRes = await fetch(BACKEND_URL + '/pass');
+        if (passRes.ok) {
+          const passData = await passRes.json();
+          if (passData && passData.pass) accessPass = passData.pass;
+        }
       } catch (_) {}
+
+      let token = null;
+      try {
+        const tokenRes = await fetch(VIDVAULT_BASE + '/get-token', { headers: MANDATORY_HEADERS });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          token = tokenData && tokenData.t;
+        }
+      } catch (_) {}
+
+      if (token) {
+        const body = { type: type, tmdbId: tmdbId };
+        if (isTv) {
+          body.season = season || 1;
+          body.episode = episode || 1;
+        }
+
+        const headers = {
+          'Content-Type': 'application/json',
+          'x-request-token': token,
+          'User-Agent': DEFAULT_USER_AGENT,
+          'Referer': 'https://vidvault.ru/',
+          'Origin': 'https://vidvault.ru',
+        };
+        if (accessPass) headers['x-access-pass'] = accessPass;
+
+        try {
+          const proxyRes = await fetch(VIDVAULT_BASE + '/download-proxy', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body),
+          });
+          if (proxyRes.ok) data = await proxyRes.json();
+        } catch (_) {}
+      }
     }
 
-    // ─── ENGINE 3: Backend Extraction Fallback ───────────────────────────────
+    // ─── ENGINE 4: Backend Extraction Fallback ───────────────────────────────
     if (!data) {
       try {
         let fallbackUrl = BACKEND_URL + '/extract?tmdbId=' + tmdbId + '&type=' + type;
@@ -223,7 +243,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
       }
     };
 
-    // Parse MKV V3 / V2 / V1
+    // Parse MKV V3 / V2 / V1 (Direct Cloudflare R2 files)
     const mkvV3 = data && data.mkvV3Data;
     const v3Files = Array.isArray(mkvV3) ? mkvV3 : Array.isArray(mkvV3 && mkvV3.files) ? mkvV3.files : (mkvV3 && mkvV3.url) ? [mkvV3] : [];
     v3Files.forEach(function (file) {

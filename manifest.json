@@ -1,5 +1,5 @@
 {
-    "version":  263,
+    "version":  264,
     "providerPriority":  [
                              "CineJoy",
                              "Videasy",
@@ -29,7 +29,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "0A353635FED3B9444348C7BB1B904CD0",
+                                       "hash":  "7DEE7305A2827461BF773FDF91017FD7",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -91,7 +91,7 @@
                                    },
                       "VidSrc":  {
                                      "file":  "extractors/VidSrcExtractor.js",
-                                     "hash":  "C1E58FDBCCB3B943C64AD3692081E181",
+                                     "hash":  "C238C99ECC78FEE36EA61ABF8728EB7D",
                                      "mediaTypes":  [
                                                         "movie",
                                                         "tv"
@@ -99,7 +99,7 @@
                                  },
                       "OzTv":  {
                                    "file":  "extractors/OzTvExtractor.js",
-                                   "hash":  "DF167BAC5D82915D5A274EC734347108",
+                                   "hash":  "B847EB69427E4014F7D8B736623F5BE3",
                                    "mediaTypes":  [
                                                       "movie",
                                                       "tv"
@@ -107,7 +107,7 @@
                                },
                       "VidSrcMe":  {
                                        "file":  "extractors/VidSrcMeExtractor.js",
-                                       "hash":  "C4AD0AEDB9BE15B9E5FB7EC133D61075",
+                                       "hash":  "0A555E7D916EB1DF5BCF0798127FC2F0",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

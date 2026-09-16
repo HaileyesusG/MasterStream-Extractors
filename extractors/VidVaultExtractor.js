@@ -1,14 +1,15 @@
 /**
  * VidVault Remote Extractor
  * Pure Native VidVault Engine:
- * 1. Native Android WebView Turnstile Bridge (vidvault.ru direct Cloudflare R2 MKVs)
- * 2. VidVault direct token proxy + backend pass
- * 3. NHD math solver (backup only)
+ * 1. VidVault Direct Token API (Fast Path - no Cloudflare Turnstile human click verification needed)
+ * 2. Native Android WebView Turnstile Bridge (Fallback if challenge occurs)
+ * 3. NHD math solver (Backup fallback)
  * CommonJS format for MasterStream-Extractors GitHub repo.
  */
 
 const NHD_BASE = 'https://nhdapi.st/api';
-const VIDVAULT_BASE = 'https://vidvault.ru/api';
+const VIDVAULT_BASE = 'https://vidvault.to/api';
+const VIDVAULT_BASE_BACKUP = 'https://vidvault.ru/api';
 const BACKEND_URL = 'https://backendmasterstream.onrender.com/api/cinejoy/vidvault';
 const PRIMARY_WORKER = 'https://vlaq11.site';
 const SUBTITLE_WORKER = 'https://sub.k5s7sjozpn.workers.dev';
@@ -18,37 +19,38 @@ const DEFAULT_USER_AGENT =
 
 const MANDATORY_HEADERS = {
   'User-Agent': DEFAULT_USER_AGENT,
-  'Referer': 'https://vidvault.ru/',
-  'Origin': 'https://vidvault.ru',
+  'Referer': 'https://vidvault.to/',
+  'Origin': 'https://vidvault.to',
 };
 
-async function extract(tmdbId, isTv, season, episode, title) {
+async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
   try {
+    let isTv, season, episode, title;
+    if (typeof arg1 === 'boolean') {
+      isTv = arg1;
+      season = arg2;
+      episode = arg3;
+      title = arg4;
+    } else if (typeof arg3 === 'boolean') {
+      title = arg2;
+      isTv = arg3;
+      season = arg4;
+      episode = arg5;
+    } else {
+      isTv = !!arg1;
+      season = arg2;
+      episode = arg3;
+      title = arg4;
+    }
+
     const type = isTv ? 'tv' : 'movie';
     const safeTitle = encodeURIComponent(title || 'MasterStream_Download');
 
     let data = null;
 
-    // ─── ENGINE 1 (PRIMARY): Native Android WebView Bridge (vidvault.ru Direct) ──
+    // ─── ENGINE 1 (PRIMARY): Direct VidVault Token Proxy (Instant Fast Path) ──
+    // VidVault no longer requires Cloudflare Turnstile human click verification.
     try {
-      if (typeof NativeModules !== 'undefined' && NativeModules && NativeModules.StreamSniffer && typeof NativeModules.StreamSniffer.sniffJson === 'function') {
-        const vidvaultPageUrl = isTv
-          ? 'https://vidvault.ru/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
-          : 'https://vidvault.ru/movie/' + tmdbId;
-
-        console.log('[VidVault] 🚀 Running Native Turnstile Solver for ' + vidvaultPageUrl);
-        const jsonStr = await NativeModules.StreamSniffer.sniffJson(vidvaultPageUrl, 'download-proxy', 25000);
-        if (jsonStr) {
-          data = JSON.parse(jsonStr);
-          console.log('[VidVault] ✅ Native Turnstile Solver succeeded!');
-        }
-      }
-    } catch (e) {
-      console.log('[VidVault] ⚠️ Native solver error: ' + (e && e.message));
-    }
-
-    // ─── ENGINE 2: VidVault Direct Token Proxy ──────────────────────────────
-    if (!data) {
       let accessPass = null;
       try {
         const passRes = await fetch(BACKEND_URL + '/pass');
@@ -58,39 +60,70 @@ async function extract(tmdbId, isTv, season, episode, title) {
         }
       } catch (_) {}
 
-      let token = null;
-      try {
-        const tokenRes = await fetch(VIDVAULT_BASE + '/get-token', { headers: MANDATORY_HEADERS });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          token = tokenData && tokenData.t;
-        }
-      } catch (_) {}
-
-      if (token) {
-        const body = { type: type, tmdbId: tmdbId };
-        if (isTv) {
-          body.season = season || 1;
-          body.episode = episode || 1;
-        }
-
-        const headers = {
-          'Content-Type': 'application/json',
-          'x-request-token': token,
-          'User-Agent': DEFAULT_USER_AGENT,
-          'Referer': 'https://vidvault.ru/',
-          'Origin': 'https://vidvault.ru',
-        };
-        if (accessPass) headers['x-access-pass'] = accessPass;
-
+      const bases = [VIDVAULT_BASE, VIDVAULT_BASE_BACKUP];
+      for (const base of bases) {
+        let token = null;
         try {
-          const proxyRes = await fetch(VIDVAULT_BASE + '/download-proxy', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body),
-          });
-          if (proxyRes.ok) data = await proxyRes.json();
+          const tokenRes = await fetch(base + '/get-token', { headers: MANDATORY_HEADERS });
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            token = tokenData && tokenData.t;
+          }
         } catch (_) {}
+
+        if (token) {
+          const body = { type: type, tmdbId: String(tmdbId) };
+          if (isTv) {
+            body.season = Number(season) || 1;
+            body.episode = Number(episode) || 1;
+          }
+
+          const headers = {
+            'Content-Type': 'application/json',
+            'x-request-token': token,
+            ...MANDATORY_HEADERS,
+          };
+          if (accessPass) headers['x-access-pass'] = accessPass;
+
+          try {
+            const proxyRes = await fetch(base + '/download-proxy', {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify(body),
+            });
+            if (proxyRes.ok) {
+              data = await proxyRes.json();
+              if (data) break;
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.log('[VidVault] Direct proxy error: ' + (e && e.message));
+    }
+
+    // ─── ENGINE 2: Native Android WebView Bridge (Fallback if Turnstile challenged) ──
+    if (!data) {
+      try {
+        if (
+          typeof NativeModules !== 'undefined' &&
+          NativeModules &&
+          NativeModules.StreamSniffer &&
+          typeof NativeModules.StreamSniffer.sniffJson === 'function'
+        ) {
+          const vidvaultPageUrl = isTv
+            ? 'https://vidvault.to/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
+            : 'https://vidvault.to/movie/' + tmdbId;
+
+          console.log('[VidVault] 🚀 Running Native Turnstile Solver for ' + vidvaultPageUrl);
+          const jsonStr = await NativeModules.StreamSniffer.sniffJson(vidvaultPageUrl, 'download-proxy', 25000);
+          if (jsonStr) {
+            data = JSON.parse(jsonStr);
+            console.log('[VidVault] ✅ Native Turnstile Solver succeeded!');
+          }
+        }
+      } catch (e) {
+        console.log('[VidVault] ⚠️ Native solver error: ' + (e && e.message));
       }
     }
 
@@ -106,30 +139,53 @@ async function extract(tmdbId, isTv, season, episode, title) {
         }
       };
 
-      // Parse MKV V3 / V2 / V1 (Direct Cloudflare R2 files)
+      // Parse MKV V3 (Direct Cloudflare R2 files)
       const mkvV3 = data && data.mkvV3Data;
+      if (mkvV3 && Array.isArray(mkvV3.downloads)) {
+        mkvV3.downloads.forEach(function (L) {
+          if (!L) return;
+          if (Array.isArray(L.qualities)) {
+            L.qualities.forEach(function (F) {
+              if (!F) return;
+              const qLabel = F.quality ? (String(F.quality).replace(/p$/i, '') + 'p (MKV)') : '1080p (MKV)';
+              if (Array.isArray(F.episodes)) {
+                F.episodes.forEach(function (A) {
+                  if (A && A.url) addQuality(mkvQualities, qLabel, A.url);
+                });
+              } else if (F.url) {
+                addQuality(mkvQualities, qLabel, F.url);
+              }
+            });
+          } else if (L.url) {
+            const qLabel = L.quality ? (String(L.quality).replace(/p$/i, '') + 'p (MKV)') : '1080p (MKV)';
+            addQuality(mkvQualities, qLabel, L.url);
+          }
+        });
+      }
       const v3Files = Array.isArray(mkvV3) ? mkvV3 : Array.isArray(mkvV3 && mkvV3.files) ? mkvV3.files : (mkvV3 && mkvV3.url) ? [mkvV3] : [];
       v3Files.forEach(function (file) {
         if (file && file.url) {
-          const qLabel = file.quality ? (file.quality.replace(/p$/i, '') + 'p (MKV)') : '1080p (MKV)';
+          const qLabel = file.quality ? (String(file.quality).replace(/p$/i, '') + 'p (MKV)') : '1080p (MKV)';
           addQuality(mkvQualities, qLabel, file.url);
         }
       });
 
+      // Parse MKV V2
       const mkvV2 = data && data.mkvV2Data;
       const v2Files = Array.isArray(mkvV2) ? mkvV2 : Array.isArray(mkvV2 && mkvV2.files) ? mkvV2.files : (mkvV2 && mkvV2.url) ? [mkvV2] : [];
       v2Files.forEach(function (file) {
         if (file && file.url) {
-          const qLabel = file.quality ? (file.quality.replace(/p$/i, '') + 'p (MKV)') : '720p (MKV)';
+          const qLabel = file.quality ? (String(file.quality).replace(/p$/i, '') + 'p (MKV)') : '720p (MKV)';
           addQuality(mkvQualities, qLabel, file.url);
         }
       });
 
+      // Parse MKV V1
       const mkvData = data && data.mkvData;
       const mkvFiles = Array.isArray(mkvData) ? mkvData : Array.isArray(mkvData && mkvData.files) ? mkvData.files : (mkvData && mkvData.url) ? [mkvData] : [];
       mkvFiles.forEach(function (file) {
         if (file && file.url) {
-          const qLabel = file.quality ? (file.quality.replace(/p$/i, '') + 'p (MKV)') : '480p (MKV)';
+          const qLabel = file.quality ? (String(file.quality).replace(/p$/i, '') + 'p (MKV)') : '480p (MKV)';
           addQuality(mkvQualities, qLabel, file.url);
         }
       });
@@ -142,14 +198,14 @@ async function extract(tmdbId, isTv, season, episode, title) {
       downloads.forEach(function (item) {
         if (!item || !item.url) return;
         const resNum = item.resolution || item.resolutions;
-        const qualityStr = resNum ? (resNum + 'p') : 'Auto';
+        const qualityStr = resNum ? (resNum + 'p (MP4)') : 'MP4';
         const workerUrl = PRIMARY_WORKER + '/' + encodeURIComponent(item.url) + '?n=' + safeTitle;
         addQuality(mp4Qualities, qualityStr, workerUrl);
       });
 
       mp4Qualities.sort(function (a, b) { return (parseInt(b.quality) || 0) - (parseInt(a.quality) || 0); });
 
-      const allQualities = mkvQualities.length > 0 ? mkvQualities : mp4Qualities;
+      const allQualities = mkvQualities.concat(mp4Qualities);
       if (allQualities.length > 0) {
         const subtitles = [];
         const captions = (downloadInfoData && downloadInfoData.captions) || [];
@@ -237,10 +293,7 @@ async function extract(tmdbId, isTv, season, episode, title) {
                   url: nhdQualities[0].url,
                   quality: nhdQualities[0].quality,
                   provider: 'VidVault',
-                  headers: {
-                    'User-Agent': DEFAULT_USER_AGENT,
-                    'Referer': 'https://vidvault.ru/',
-                  },
+                  headers: MANDATORY_HEADERS,
                   qualities: nhdQualities,
                   subtitles: [],
                 };

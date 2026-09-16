@@ -1,5 +1,5 @@
 {
-    "version":  265,
+    "version":  266,
     "providerPriority":  [
                              "CineJoy",
                              "Videasy",
@@ -19,7 +19,7 @@
     "providers":  {
                       "CineJoy":  {
                                       "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "AB2143AD01929893A5254FAEF8FBCE92",
+                                      "hash":  "DF621D0F421CB91CCDA3C48EAB666F5F",
                                       "webBaseUrl":  "https://cinejoy.to/",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
@@ -29,7 +29,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "7DEE7305A2827461BF773FDF91017FD7",
+                                       "hash":  "BBAFCE967DF76727AAE23932EBD9A07D",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

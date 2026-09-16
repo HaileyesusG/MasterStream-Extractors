@@ -130,7 +130,6 @@ async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
     // Parse direct VidVault response if obtained from Engine 1 or Engine 2
     if (data) {
       const mkvQualities = [];
-      const mp4Qualities = [];
 
       const addQuality = function (targetList, qualityStr, streamUrl) {
         if (!streamUrl) return;
@@ -190,44 +189,21 @@ async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
         }
       });
 
-      // Parse MP4s
-      const mp4Data = data && data.mp4Data;
-      const downloadInfoData = (mp4Data && mp4Data.downloadInfo && mp4Data.downloadInfo.data) || (mp4Data && mp4Data.data) || (data && data.data);
-      const downloads = (downloadInfoData && (downloadInfoData.downloads || downloadInfoData.streams)) || [];
-
-      downloads.forEach(function (item) {
-        if (!item || !item.url) return;
-        const resNum = item.resolution || item.resolutions;
-        const qualityStr = resNum ? (resNum + 'p (MP4)') : 'MP4';
-        const workerUrl = PRIMARY_WORKER + '/' + encodeURIComponent(item.url) + '?n=' + safeTitle;
-        addQuality(mp4Qualities, qualityStr, workerUrl);
+      // Sort MKVs by resolution descending
+      mkvQualities.sort(function (a, b) {
+        return (parseInt(b.quality, 10) || 0) - (parseInt(a.quality, 10) || 0);
       });
 
-      mp4Qualities.sort(function (a, b) { return (parseInt(b.quality) || 0) - (parseInt(a.quality) || 0); });
-
-      const allQualities = mkvQualities.concat(mp4Qualities);
-      if (allQualities.length > 0) {
-        const subtitles = [];
-        const captions = (downloadInfoData && downloadInfoData.captions) || [];
-        captions.forEach(function (cap) {
-          if (cap && cap.url && cap.lanName) {
-            subtitles.push({
-              label: cap.lanName,
-              lang: cap.lanCode || cap.lanName,
-              url: SUBTITLE_WORKER + '/?url=' + encodeURIComponent(cap.url) + '&title=' + safeTitle,
-              headers: MANDATORY_HEADERS,
-            });
-          }
-        });
-
-        const bestQuality = allQualities[0];
+      // Filter out MP4s - only return MKVs with embedded subtitles
+      if (mkvQualities.length > 0) {
+        const bestQuality = mkvQualities[0];
         return {
           url: bestQuality.url,
           quality: bestQuality.quality,
           provider: 'VidVault',
           headers: MANDATORY_HEADERS,
-          qualities: allQualities,
-          subtitles: subtitles,
+          qualities: mkvQualities,
+          subtitles: [],
         };
       }
     }

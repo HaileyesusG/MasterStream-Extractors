@@ -1,14 +1,14 @@
 {
-  "version": 147,
+  "version": 148,
   "providerPriority": [
+    "VidSrcMe",
     "CineJoy",
     "VidFast",
     "Videasy",
-    "VixSrc",
-    "VidSrcCC",
-    "LordFlix",
     "VaPlayer",
-    "VidSrcMe",
+    "LordFlix",
+    "VidSrcCC",
+    "VixSrc",
     "Vidlink"
   ],
   "Videasy": {

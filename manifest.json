@@ -1,11 +1,11 @@
 {
-    "version":  271,
+    "version":  273,
     "providerPriority":  [
+                             "VidSrcMe",
                              "CineJoy",
-                             "VidFast",
                              "Videasy",
+                             "VidFast",
                              "VaPlayer",
-                             "VixSrc",
                              "VidSrcCC",
                              "OzTv",
                              "VidSrc",
@@ -13,7 +13,7 @@
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
-                             "VidSrcMe",
+                             "VixSrc",
                              "Vidlink"
                          ],
     "providers":  {
@@ -107,7 +107,7 @@
                                },
                       "VidSrcMe":  {
                                        "file":  "extractors/VidSrcMeExtractor.js",
-                                       "hash":  "0A555E7D916EB1DF5BCF0798127FC2F0",
+                                       "hash":  "942DC8ADFCFE886B089F0975E087149C",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

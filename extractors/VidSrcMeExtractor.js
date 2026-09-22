@@ -24,5 +24,14 @@
     return null;
   }
 
-  module.exports = { extract: extract };
+  var extractor = { extract: extract };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = extractor;
+  }
+  var gObj = typeof globalThis !== 'undefined' ? globalThis
+    : typeof window !== 'undefined' ? window
+    : typeof global !== 'undefined' ? global : this;
+  if (gObj) {
+    gObj.VidSrcMeExtractor = extractor;
+  }
 })();

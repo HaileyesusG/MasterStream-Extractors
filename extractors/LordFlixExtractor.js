@@ -146,7 +146,7 @@
       return {
         url: finalUrl,
         quality: data.quality || 'Auto',
-        provider: 'VidSrcMe',
+        provider: 'LordFlix',
         headers: data.headers || {
           'User-Agent': USER_AGENT,
           'Referer': REFERER,
@@ -206,7 +206,7 @@
               return {
                 url: finalUrl,
                 quality: 'Auto',
-                provider: 'VidSrcMe',
+                provider: 'LordFlix',
                 headers: {
                   'User-Agent': USER_AGENT,
                   'Referer': REFERER,
@@ -238,6 +238,6 @@
     : typeof window !== 'undefined' ? window
     : typeof global !== 'undefined' ? global : this;
   if (gObj) {
-    gObj.VidSrcMeExtractor = extractor;
+    gObj.LordFlixExtractor = extractor;
   }
 })();

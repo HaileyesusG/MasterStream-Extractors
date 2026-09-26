@@ -1,5 +1,5 @@
 /**
- * VidFastExtractor ΓÇö self-contained CommonJS JS for remote hot-update.
+ * VidFastExtractor — self-contained CommonJS JS for remote hot-update.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VidFastExtractor.js
  *
  * To update: edit this file, run Update-Manifest.ps1, commit and push.
@@ -7,40 +7,47 @@
  */
 (function () {
   var TAG = '[VidFastExtractor]';
-  // -- Media type support ∩┐╜ change here to enable/disable for movies or TV --
+  // -- Media type support — change here to enable/disable for movies or TV --
   var SUPPORTS_MOVIE = true;
   var SUPPORTS_TV    = true;
 
   var DOMAIN = 'https://vidfast.vc';
   var ENC_DEC_API = 'https://enc-dec.app/api';
-  var VERSION = '1';
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
     // Dual calling-convention support:
-    //   Mobile app: extract(tmdbId, isTv, season, episode)               ΓÇö 4 params
-    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) ΓÇö 7 params
-    var isTv, season, episode;
+    //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
+    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
+    var isTv, season, episode, imdbId;
     if (typeof arg1 === 'boolean') {
       isTv = arg1; season = arg2; episode = arg3; // mobile
     } else {
-      isTv = arg3; season = arg4; episode = arg5; // TV app
+      imdbId = arg1; isTv = arg3; season = arg4; episode = arg5; // TV app
     }
     try {
       if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' Skip Movie'); return null; }
+
+      // Prefer TMDB id, or fallback to imdbId if tmdbId is missing
+      var id = tmdbId || imdbId;
+      if (!id) {
+        console.warn(TAG + ' ❌ Missing tmdbId/imdbId');
+        return null;
+      }
+
       // Step 1: Fetch vidfast embed page and extract the encrypted text token
       var pageUrl = isTv
-        ? DOMAIN + '/tv/' + tmdbId + '/' + season + '/' + episode + '/'
-        : DOMAIN + '/movie/' + tmdbId;
+        ? DOMAIN + '/tv/' + id + '/' + (season || 1) + '/' + (episode || 1) + '/'
+        : DOMAIN + '/movie/' + id;
 
-      console.log(TAG + ' ≡ƒÜÇ Fetching page: ' + pageUrl);
+      console.log(TAG + ' 🚀 Fetching page: ' + pageUrl);
 
+      // Note: Initial HTML page MUST NOT include 'X-Requested-With', otherwise vidfast returns HTTP 403 Forbidden!
       var pageHeaders = {
         'User-Agent': USER_AGENT,
-        Referer: DOMAIN + '/',
-        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': DOMAIN + '/',
       };
 
       var pageRes = await fetch(pageUrl, { headers: pageHeaders });
@@ -50,8 +57,8 @@
       }
       var html = await pageRes.text();
 
-      // Extract the encrypted text from the page JSON.
-      // Combined regex scanning for both "en" and "token" field names (per enc-dec.app recommendation).
+      // Extract the encrypted text from the page JSON / Next.js RSC payload.
+      // Combined regex scanning for both "en" and "token" field names.
       var match = html.match(/\\\"(?:en|token)\\\":\\\"(.*?)\\\"/) ||
                   html.match(/"(?:en|token)"\s*:\s*"([^"]+)"/);
       if (!match) {
@@ -63,30 +70,37 @@
 
       // Step 2: Get enc-vidfast data (servers URL, stream base URL, CSRF token)
       var encRes = await fetch(
-        ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText) + '&version=' + VERSION
+        ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText)
       );
       if (!encRes.ok) {
-        console.warn(TAG + ' Γ¥î enc-vidfast HTTP ' + encRes.status);
+        console.warn(TAG + ' ❌ enc-vidfast HTTP ' + encRes.status);
         return null;
       }
       var encData = await encRes.json();
       if (encData.status !== 200 || !encData.result) {
-        console.warn(TAG + ' Γ¥î enc-vidfast failed: ' + encData.error);
+        console.warn(TAG + ' ❌ enc-vidfast failed: ' + (encData.error || 'unknown'));
         return null;
       }
 
       var serversUrl = encData.result.servers;
       var streamBase = encData.result.stream;
       var token = encData.result.token;
-      pageHeaders['X-CSRF-Token'] = token;
+
+      // API endpoints (servers & stream) require X-Requested-With and X-CSRF-Token
+      var apiHeaders = {
+        'User-Agent': USER_AGENT,
+        'Referer': DOMAIN + '/',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-Token': token,
+      };
 
       // Step 3: Fetch and decrypt server list
       var serversRes = await fetch(serversUrl, {
         method: 'POST',
-        headers: pageHeaders,
+        headers: apiHeaders,
       });
       if (!serversRes.ok) {
-        console.warn(TAG + ' Γ¥î servers POST HTTP ' + serversRes.status);
+        console.warn(TAG + ' ❌ servers POST HTTP ' + serversRes.status);
         return null;
       }
       var serversEnc = await serversRes.text();
@@ -94,20 +108,20 @@
       var decServersRes = await fetch(ENC_DEC_API + '/dec-vidfast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: serversEnc, version: VERSION }),
+        body: JSON.stringify({ text: serversEnc }),
       });
       var decServersData = await decServersRes.json();
       if (decServersData.status !== 200 || !decServersData.result || !decServersData.result.length) {
-        console.warn(TAG + ' Γ¥î dec-vidfast servers failed: ' + decServersData.error);
+        console.warn(TAG + ' ❌ dec-vidfast servers failed: ' + (decServersData.error || 'unknown'));
         return null;
       }
 
       var servers = decServersData.result;
       var serverNames = servers.map(function(s) { return s.name; }).join(', ');
-      console.log(TAG + ' ≡ƒôí Got ' + servers.length + ' servers: ' + serverNames);
+      console.log(TAG + ' 📡 Got ' + servers.length + ' servers: ' + serverNames);
 
-      // Preferred server order ΓÇö edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['vRapid', 'vEdge', 'Max', 'Cobra', 'vFast', 'Charlie', 'Bravo']; // vEdge skipped — slow CDN
+      // Preferred server order — edit here to change priority (GitHub hot-update)
+      var PREFERRED_SERVERS = ['vRapid', 'vBlaze', 'Cobra', 'Cine', 'vFast', 'Charlie', 'Bravo', 'Horizon', 'Max', 'vEdge'];
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);
@@ -115,16 +129,16 @@
         if (bi === -1) bi = PREFERRED_SERVERS.length;
         return ai - bi;
       });
-      console.log(TAG + ' ≡ƒôï Server order after priority: ' + servers.map(function(s) { return s.name; }).join(', '));
+      console.log(TAG + ' 📋 Server order after priority: ' + servers.map(function(s) { return s.name; }).join(', '));
 
-      // Step 4: Try each server ΓÇö fetch stream and decrypt
+      // Step 4: Try each server — fetch stream and decrypt
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
         try {
           var streamUrl = streamBase + '/' + server.data;
           var streamRes = await fetch(streamUrl, {
             method: 'POST',
-            headers: pageHeaders,
+            headers: apiHeaders,
           });
           if (!streamRes.ok) continue;
 
@@ -132,28 +146,30 @@
           var decStreamRes = await fetch(ENC_DEC_API + '/dec-vidfast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: streamEnc, version: VERSION }),
+            body: JSON.stringify({ text: streamEnc }),
           });
           var decStreamData = await decStreamRes.json();
 
           if (decStreamData.status !== 200 || !decStreamData.result || !decStreamData.result.url) {
-            console.warn(TAG + ' ΓÜá∩╕Å ' + server.name + ' dec-vidfast stream failed: ' + decStreamData.error);
+            console.warn(TAG + ' ⚠️ ' + server.name + ' dec-vidfast stream failed: ' + (decStreamData.error || 'unknown'));
             continue;
           }
 
           var resultObj = decStreamData.result;
-          console.log(TAG + ' Γ£à Stream extracted from server: ' + server.name);
+          console.log(TAG + ' ✅ Stream extracted from server: ' + server.name);
 
           // Parse subtitles
           var subtitles = [];
           var subList = resultObj.subtitles || resultObj.tracks || [];
           for (var j = 0; j < subList.length; j++) {
             var sub = subList[j];
-            if (sub.file && sub.label) {
+            var subUrl = sub.file || sub.url;
+            var subLabel = sub.label || sub.name || sub.lang;
+            if (subUrl && subLabel) {
               subtitles.push({
-                url: sub.file,
-                lang: sub.label,
-                label: sub.label,
+                url: subUrl,
+                lang: subLabel,
+                label: subLabel,
               });
             }
           }
@@ -182,17 +198,27 @@
             subtitles: subtitles,
           };
         } catch (err) {
-          console.warn(TAG + ' Γ¥î ' + server.name + ' error: ' + err.message);
+          console.warn(TAG + ' ❌ ' + server.name + ' error: ' + (err.message || err));
         }
       }
 
-      console.warn(TAG + ' Γ¥î All VidFast servers exhausted');
+      console.warn(TAG + ' ❌ All VidFast servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' Γ¥î Fatal error: ' + e.message);
+      console.error(TAG + ' ❌ Fatal error: ' + (e.message || e));
       return null;
     }
   }
 
-  module.exports = { extract: extract };
+  // ─── Module Export ────────────────────────────────────────────────────────────
+  var extractor = { extract: extract };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = extractor;
+  }
+  var gObj = typeof globalThis !== 'undefined' ? globalThis
+    : typeof window !== 'undefined' ? window
+    : typeof global !== 'undefined' ? global : this;
+  if (gObj) {
+    gObj.VidFastExtractor = extractor;
+  }
 })();

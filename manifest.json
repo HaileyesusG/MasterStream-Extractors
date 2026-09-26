@@ -1,5 +1,5 @@
 {
-    "version":  276,
+    "version":  277,
     "providerPriority":  [
                              "CineJoy",
                              "VidFast",
@@ -47,7 +47,7 @@
                                   },
                       "VidFast":  {
                                       "file":  "extractors/VidFastExtractor.js",
-                                      "hash":  "638F5471BA9F3DC41DC37CA11C523B7C",
+                                      "hash":  "D070CB418C9EA240F6B2AC3F71270027",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",

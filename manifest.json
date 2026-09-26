@@ -1,10 +1,10 @@
 {
-    "version":  275,
+    "version":  276,
     "providerPriority":  [
-                             "LordFlix",
                              "CineJoy",
-                             "Videasy",
                              "VidFast",
+                             "Videasy",
+                             "VixSrc",
                              "VaPlayer",
                              "VidSrcCC",
                              "OzTv",
@@ -13,7 +13,7 @@
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
-                             "VixSrc",
+                             "LordFlix",
                              "Vidlink"
                          ],
     "providers":  {

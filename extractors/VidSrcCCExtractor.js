@@ -1,5 +1,5 @@
 /**
- * VidSrcMeExtractor — repurposed as YoTurkish extractor
+ * VidSrcCCExtractor — repurposed as YoTurkish extractor
  *
  * Source: https://yoturkish.to
  * Content: Turkish TV series (dizi) with English subtitles.
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
 
-  var TAG = '[VidSrcMeExtractor]';
+  var TAG = '[VidSrcCCExtractor]';
   var YOTURKISH_BASE = 'https://yoturkish.to';
   var TMDB_KEY = 'a2dc7e427ce7dc4a54a518f239a51909';
   var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
@@ -383,7 +383,7 @@
           return {
             url: streamData.url,
             quality: 'Auto',
-            provider: 'VidSrcMe',
+            provider: 'VidSrcCC',
             headers: {
               'User-Agent': UA,
               'Referer': streamData.referer,
@@ -416,6 +416,6 @@
     : typeof global !== 'undefined' ? global
     : this;
   if (gObj) {
-    gObj.VidSrcMeExtractor = extractor;
+    gObj.VidSrcCCExtractor = extractor;
   }
 })();

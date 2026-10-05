@@ -1,5 +1,5 @@
 {
-    "version":  284,
+    "version":  285,
     "providerPriority":  [
                              "LordFlix",
                              "VidFast",
@@ -74,7 +74,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "36547DAA4E8D6C064611EAC9D525EBD4",
+                                       "hash":  "960512585441E82625FC4400CB84D84D",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -107,7 +107,7 @@
                                },
                       "VidSrcMe":  {
                                        "file":  "extractors/VidSrcMeExtractor.js",
-                                       "hash":  "040E9449A11F4A0418A2C067250FC373",
+                                       "hash":  "9240C462FA11DDE4CAFBDA2DDB5AB90E",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

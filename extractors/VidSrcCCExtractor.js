@@ -256,13 +256,17 @@
     return total + episode;
   }
 
-  async function fetchTmdbTitle(tmdbId) {
+  async function fetchTmdbTitles(tmdbId) {
+    // Returns { original, localized } so we can try Turkish name first
     try {
       var url = 'https://api.themoviedb.org/3/tv/' + tmdbId + '?api_key=' + TMDB_KEY;
       var res = await fetch(url);
       if (!res.ok) return null;
       var data = await res.json();
-      return data.name || data.original_name || null;
+      return {
+        original: data.original_name || null,
+        localized: data.name || null,
+      };
     } catch (e) { return null; }
   }
 
@@ -303,22 +307,28 @@
 
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5 /*, arg6 */) {
     // Detect calling convention:
-    //   4-param (mobile): extract(tmdbId, isTv, season, episode)
-    //   7-param (TV app): extract(tmdbId, imdbId, title, isTv, season, episode, year)
+    //   4-param (mobile VidSrcMe): extract(tmdbId, isTv, season, episode)
+    //   5-param (mobile VidSrcCC): extract(tmdbId, imdbId, isTv, season, episode)
+    //   7-param (TV app):          extract(tmdbId, imdbId, title, isTv, season, episode, year)
     var isTv, season, episode, title;
     if (typeof arg1 === 'boolean') {
-      // Mobile 4-param
-      isTv   = arg1;
+      // Mobile 4-param: arg1=isTv
+      isTv    = arg1;
       season  = arg2;
       episode = arg3;
       title   = null;
+    } else if (typeof arg2 === 'boolean') {
+      // Mobile 5-param: arg1=imdbId, arg2=isTv
+      isTv    = arg2;
+      season  = arg3;
+      episode = arg4;
+      title   = null;
     } else {
-      // TV app 7-param
-      // arg1 = imdbId, arg2 = title, arg3 = isTv, arg4 = season, arg5 = episode
+      // TV app 7-param: arg1=imdbId, arg2=title, arg3=isTv
       isTv    = arg3;
       season  = arg4;
       episode = arg5;
-      title   = arg2 || null;
+      title   = (typeof arg2 === 'string') ? arg2 : null;
     }
 
     try {
@@ -330,23 +340,33 @@
 
       console.log(TAG + ' \ud83c\uddf9\ud83c\uddf7 Searching Turkish series for tmdbId=' + tmdbId + ' S' + season + 'E' + episode);
 
-      // 1. Resolve title
-      if (!title) {
-        title = await fetchTmdbTitle(tmdbId);
+      // 1. Resolve title — try original (Turkish) name first, fall back to localized
+      var titlesToTry = [];
+      if (title) {
+        titlesToTry.push(title);
+      } else {
+        var tmdbTitles = await fetchTmdbTitles(tmdbId);
+        if (tmdbTitles) {
+          if (tmdbTitles.original) titlesToTry.push(tmdbTitles.original);
+          if (tmdbTitles.localized && tmdbTitles.localized !== tmdbTitles.original) {
+            titlesToTry.push(tmdbTitles.localized);
+          }
+        }
       }
-      if (!title) {
+      if (titlesToTry.length === 0) {
         console.warn(TAG + ' \u274c Could not resolve title for tmdbId=' + tmdbId);
         return null;
       }
 
-      console.log(TAG + ' \ud83d\udd0d Searching for: "' + title + '"');
-
-      // 2. Find series on yoturkish.to
-      var searchResult = await searchSeries(title);
-      if (!searchResult) {
-        console.log(TAG + ' \u274c Not found on yoturkish.to: "' + title + '"');
-        return null;
+      // 2. Find series on yoturkish.to — try each title candidate
+      var searchResult = null;
+      for (var t = 0; t < titlesToTry.length; t++) {
+        console.log(TAG + ' \ud83d\udd0d Searching for: "' + titlesToTry[t] + '"');
+        searchResult = await searchSeries(titlesToTry[t]);
+        if (searchResult) break;
+        console.log(TAG + ' \u274c Not found on yoturkish.to: "' + titlesToTry[t] + '"');
       }
+      if (!searchResult) return null;
       console.log(TAG + ' \u2705 Found: "' + searchResult.title + '" \u2192 ' + searchResult.seriesUrl);
 
       // 3. Resolve absolute episode number

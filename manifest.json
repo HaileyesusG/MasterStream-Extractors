@@ -1,5 +1,5 @@
 {
-    "version":  281,
+    "version":  282,
     "providerPriority":  [
                              "LordFlix",
                              "VidFast",
@@ -107,7 +107,7 @@
                                },
                       "VidSrcMe":  {
                                        "file":  "extractors/VidSrcMeExtractor.js",
-                                       "hash":  "2E6C423F72A9B01B49741602D13C14F3",
+                                       "hash":  "A2FD1A34A8D2C416EE2B3F44722CBA9B",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

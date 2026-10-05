@@ -299,8 +299,12 @@
       }
     }
 
-    // Priority: kitraskimisi → vidmoly → engifuosi/filemoon → rest
-    return kitra.concat(vidmoly, engifuosi, others);
+    // Priority: kitraskimisi → engifuosi/filemoon → vidmoly → rest
+    // Reasoning:
+    //   - kitraskimisi (cfglobalcdn.com): direct m3u8, no Referer needed ✅
+    //   - engifuosi (5775765775.com): packed JS but m3u8 requires no Referer ✅
+    //   - vidmoly (vmnow.online): short-lived tokens, Referer required → validation fails ❌
+    return kitra.concat(engifuosi, vidmoly, others);
   }
 
   // ─── Main extraction entry-point ────────────────────────────────────────────

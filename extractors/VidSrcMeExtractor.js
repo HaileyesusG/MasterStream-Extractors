@@ -132,6 +132,38 @@
     return { url: m[1], referer: 'https://vidmoly.biz/' };
   }
 
+  /**
+   * Unpack the Dean Edwards p,a,c,k,e,d JS obfuscator.
+   * Used by engifuosi.com (Filemoon-family) to hide the m3u8.
+   */
+  function unpackPACKED(html) {
+    var packedStart = html.indexOf('eval(function(p,a,c,k,e,d)');
+    if (packedStart === -1) return null;
+    var block = html.slice(packedStart, packedStart + 8000);
+    var m = block.match(/\}\('([\s\S]+?)',(\d+),(\d+),'([\s\S]+?)'\.split\('\|'\)/);
+    if (!m) return null;
+    var p = m[1], a = parseInt(m[2]), c = parseInt(m[3]);
+    var k = m[4].split('|');
+    var e = function (n) { return n.toString(a > 10 ? 36 : a); };
+    while (c--) {
+      if (k[c]) p = p.replace(new RegExp('\\b' + e(c) + '\\b', 'g'), k[c]);
+    }
+    return p;
+  }
+
+  /**
+   * engifuosi.com / Filemoon — uses p,a,c,k,e,d packer hiding the m3u8 URL.
+   */
+  async function extractEngifuosi(embedUrl) {
+    var html = await fetchText(embedUrl, YOTURKISH_BASE + '/');
+    if (!html) return null;
+    var unpacked = unpackPACKED(html) || html;
+    var m = unpacked.match(/["']([^"']+\.m3u8[^"']*)/) ||
+            unpacked.match(/file["']?\s*:\s*["']([^"']+)/);
+    if (!m || m[1].indexOf('http') !== 0) return null;
+    return { url: m[1], referer: getOrigin(embedUrl) + '/' };
+  }
+
   async function tryExtractStream(iframeSrc) {
     if (!iframeSrc || iframeSrc === '#' || iframeSrc === 'about:blank') return null;
     var host = getHost(iframeSrc);
@@ -142,8 +174,14 @@
       if (host.indexOf('vidmoly') !== -1) {
         return await extractVidmoly(iframeSrc);
       }
-      // Generic: try kitraskimisi-style m3u8 extraction
-      return await extractKitraskimisi(iframeSrc);
+      if (host.indexOf('engifuosi') !== -1 || host.indexOf('filemoon') !== -1 ||
+          host.indexOf('fembed') !== -1 || host.indexOf('moonplayer') !== -1) {
+        return await extractEngifuosi(iframeSrc);
+      }
+      // Generic fallback: try direct m3u8 first, then p,a,c,k,e,d unpack
+      var result = await extractKitraskimisi(iframeSrc);
+      if (result) return result;
+      return await extractEngifuosi(iframeSrc);
     } catch (e) {
       console.warn(TAG + ' player error [' + host + ']: ' + (e.message || e));
       return null;
@@ -230,13 +268,15 @@
 
   /**
    * Decodes all data-sN attributes in an episode page and returns
-   * iframe src URLs in priority order (kitraskimisi first, then others).
+   * iframe src URLs in priority order:
+   *   kitraskimisi (direct m3u8) → vidmoly (direct m3u8) → engifuosi (packed) → rest
    */
   function decodePagePlayers(episodeHtml) {
     var regex = /data-s\d+="([^"]+)"/g;
     var m;
     var kitra = [];
     var vidmoly = [];
+    var engifuosi = [];
     var others = [];
 
     while ((m = regex.exec(episodeHtml)) !== null) {
@@ -248,13 +288,15 @@
         kitra.push(src);
       } else if (host.indexOf('vidmoly') !== -1) {
         vidmoly.push(src);
+      } else if (host.indexOf('engifuosi') !== -1 || host.indexOf('filemoon') !== -1) {
+        engifuosi.push(src);
       } else {
         others.push(src);
       }
     }
 
-    // Priority: kitraskimisi → vidmoly → rest
-    return kitra.concat(vidmoly, others);
+    // Priority: kitraskimisi → vidmoly → engifuosi/filemoon → rest
+    return kitra.concat(vidmoly, engifuosi, others);
   }
 
   // ─── Main extraction entry-point ────────────────────────────────────────────

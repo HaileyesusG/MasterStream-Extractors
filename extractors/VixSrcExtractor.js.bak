@@ -98,64 +98,22 @@
       var text = textMatch[1];
       console.log(TAG + ' 🔑 Found encrypted text (len=' + text.length + ')');
 
-      // 1. Call enc-vidup (2-stage handshake with legacy fallback)
-      var serversUrl, streamUrl, token;
+      // 1. Call enc-vidup
+      var encUrl = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(text);
+      var encRaw = await fetchGet(encUrl, { 'User-Agent': USER_AGENT });
+      if (!encRaw) return null;
 
-      var stage1Url = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(text) + '&stage=1';
-      var stage1Raw = await fetchGet(stage1Url, { 'User-Agent': USER_AGENT });
-      var stage1Json = null;
-      try { if (stage1Raw) stage1Json = JSON.parse(stage1Raw); } catch (e) {}
+      var encJson;
+      try { encJson = JSON.parse(encRaw); } catch (e) { return null; }
 
-      if (stage1Json && stage1Json.status === 200 && stage1Json.result && stage1Json.result.stage1) {
-        // 2-Stage Handshake
-        var stage1Encrypted = stage1Json.result.stage1;
-        var token1 = stage1Json.result.token;
-
-        var s1Headers = {
-          'User-Agent': USER_AGENT,
-          'Referer': DOMAIN + '/',
-          'X-Requested-With': 'XMLHttpRequest',
-        };
-        if (token1) s1Headers['X-CSRF-Token'] = token1;
-
-        var s1PostText = await fetchPost(stage1Encrypted, '', s1Headers);
-        if (!s1PostText) {
-          console.warn(TAG + ' ❌ stage1 POST failed');
-          return null;
-        }
-
-        // Stage 2
-        var stage2Url = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(s1PostText) + '&stage=2';
-        var stage2Raw = await fetchGet(stage2Url, { 'User-Agent': USER_AGENT });
-        var stage2Json = null;
-        try { if (stage2Raw) stage2Json = JSON.parse(stage2Raw); } catch (e) {}
-
-        if (!stage2Json || stage2Json.status !== 200 || !stage2Json.result) {
-          console.warn(TAG + ' ❌ stage2 enc-vidup API error: ' + (stage2Json ? stage2Json.error : 'unknown'));
-          return null;
-        }
-        serversUrl = stage2Json.result.servers;
-        streamUrl = stage2Json.result.stream;
-        token = stage2Json.result.token;
-      } else {
-        // Legacy 1-Stage Fallback
-        console.log(TAG + ' ℹ️ Stage 1 unavailable, falling back to legacy 1-stage enc-vidup...');
-        var encUrl = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(text);
-        var encRaw = await fetchGet(encUrl, { 'User-Agent': USER_AGENT });
-        if (!encRaw) return null;
-
-        var encJson;
-        try { encJson = JSON.parse(encRaw); } catch (e) { return null; }
-
-        if (encJson.status !== 200 || !encJson.result) {
-          console.warn(TAG + ' ❌ enc-vidup API error: ' + (encJson.error || 'unknown'));
-          return null;
-        }
-
-        serversUrl = encJson.result.servers;
-        streamUrl = encJson.result.stream;
-        token = encJson.result.token;
+      if (encJson.status !== 200 || !encJson.result) {
+        console.warn(TAG + ' ❌ enc-vidup API error: ' + (encJson.error || 'unknown'));
+        return null;
       }
+
+      var serversUrl = encJson.result.servers;
+      var streamUrl = encJson.result.stream;
+      var token = encJson.result.token;
 
       if (!serversUrl || !streamUrl) {
         console.warn(TAG + ' ❌ Missing servers or stream URL');

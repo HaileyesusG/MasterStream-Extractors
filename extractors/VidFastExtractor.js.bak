@@ -69,81 +69,30 @@
       console.log(TAG + ' 🔑 Found encrypted text (' + encText.length + ' chars)');
 
       // Step 2: Get enc-vidfast data (servers URL, stream base URL, CSRF token)
-      // Supports both new 2-stage handshake and legacy 1-stage fallback (in case dev rolls back)
-      var serversUrl, streamBase, token;
-
-      var stage1Res = await fetch(
-        ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText) + '&stage=1'
+      var encRes = await fetch(
+        ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText)
       );
-      var stage1Data = stage1Res.ok ? await stage1Res.json() : null;
-
-      if (stage1Data && stage1Data.status === 200 && stage1Data.result && stage1Data.result.stage1) {
-        // 2-Stage Handshake
-        var stage1Encrypted = stage1Data.result.stage1;
-        var token1 = stage1Data.result.token;
-
-        var s1Headers = {
-          'User-Agent': USER_AGENT,
-          'Referer': DOMAIN + '/',
-          'X-Requested-With': 'XMLHttpRequest',
-        };
-        if (token1) s1Headers['X-CSRF-Token'] = token1;
-
-        var s1PostRes = await fetch(stage1Encrypted, {
-          method: 'POST',
-          headers: s1Headers,
-        });
-        if (!s1PostRes.ok) {
-          console.warn(TAG + ' ❌ stage1 POST HTTP ' + s1PostRes.status);
-          return null;
-        }
-        var s1PostText = await s1PostRes.text();
-
-        // Stage 2
-        var stage2Res = await fetch(
-          ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(s1PostText) + '&stage=2'
-        );
-        if (!stage2Res.ok) {
-          console.warn(TAG + ' ❌ stage2 HTTP ' + stage2Res.status);
-          return null;
-        }
-        var stage2Data = await stage2Res.json();
-        if (stage2Data.status !== 200 || !stage2Data.result) {
-          console.warn(TAG + ' ❌ stage2 failed: ' + (stage2Data.error || 'unknown'));
-          return null;
-        }
-        serversUrl = stage2Data.result.servers;
-        streamBase = stage2Data.result.stream;
-        token = stage2Data.result.token;
-      } else {
-        // Legacy 1-Stage Handshake Fallback (if dev rolls back changes)
-        console.log(TAG + ' ℹ️ Stage 1 unavailable, falling back to legacy 1-stage enc-vidfast...');
-        var encRes = await fetch(
-          ENC_DEC_API + '/enc-vidfast?text=' + encodeURIComponent(encText)
-        );
-        if (!encRes.ok) {
-          console.warn(TAG + ' ❌ enc-vidfast HTTP ' + encRes.status);
-          return null;
-        }
-        var encData = await encRes.json();
-        if (encData.status !== 200 || !encData.result) {
-          console.warn(TAG + ' ❌ enc-vidfast failed: ' + (encData.error || 'unknown'));
-          return null;
-        }
-        serversUrl = encData.result.servers;
-        streamBase = encData.result.stream;
-        token = encData.result.token;
+      if (!encRes.ok) {
+        console.warn(TAG + ' ❌ enc-vidfast HTTP ' + encRes.status);
+        return null;
       }
+      var encData = await encRes.json();
+      if (encData.status !== 200 || !encData.result) {
+        console.warn(TAG + ' ❌ enc-vidfast failed: ' + (encData.error || 'unknown'));
+        return null;
+      }
+
+      var serversUrl = encData.result.servers;
+      var streamBase = encData.result.stream;
+      var token = encData.result.token;
 
       // API endpoints (servers & stream) require X-Requested-With and X-CSRF-Token
       var apiHeaders = {
         'User-Agent': USER_AGENT,
         'Referer': DOMAIN + '/',
         'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-Token': token,
       };
-      if (token) {
-        apiHeaders['X-CSRF-Token'] = token;
-      }
 
       // Step 3: Fetch and decrypt server list
       var serversRes = await fetch(serversUrl, {

@@ -177,6 +177,11 @@
       headers: {
         'User-Agent': USER_AGENT,
         'Referer': VIDSRC_BASE + '/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Sec-Fetch-Dest': 'iframe',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'cross-site',
       },
     });
     if (!landingRes.ok) {
@@ -204,6 +209,11 @@
       headers: {
         'User-Agent': USER_AGENT,
         'Referer': landingUrl,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Sec-Fetch-Dest': 'iframe',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
       },
     });
     if (!playerRes.ok) {

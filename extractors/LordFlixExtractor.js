@@ -1,23 +1,28 @@
 /**
- * LordFlix / VidSrcMe Fast Remote Extractor
+ * LordFlix / VidSrc (vidsrc.sh) Fast Remote Extractor
  * Hot-loaded via RemoteJsExtractor (TV) and RemoteExtractorLoader (Mobile).
  *
- * Strategy:
- *   - Android TV (V8/WebView): Runs direct WASM decryption locally — ~400ms.
- *   - Mobile (React Native Hermes): No WebAssembly, calls backend proxy — ~300ms.
+ * Flow:
+ *   1. Embed page: https://vidsrc.sh/embed/movie/{id} or /embed/tv/{id}/{s}/{e}
+ *   2. Gate endpoint: /vs_src.php -> returns landing iframe URL
+ *   3. Landing page: extracts CFG.playerUrl
+ *   4. Player page: extracts CONFIG.api + CONFIG.apiToken
+ *   5. API call: CONFIG.api + api_token -> encrypted ChaCha20 payload + wasm_url
+ *   6. WASM decryption: compiles and decrypts stream URLs
+ *   7. Client-bound IP token: mints fresh JWT via /generate.php
  *
- * Works 100% without WebView sniffer. Zero CPU lag on Android TV devices.
+ * Supports both Android TV (V8 / WASM) and Mobile fallback.
  */
 
 (function () {
   'use strict';
 
+  var TAG = '[LordFlixExtractor]';
+  var VIDSRC_BASE = 'https://vidsrc.sh';
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
-  var REFERER = 'https://cloudorchestranova.com/';
-  var API_BASE = 'https://data.vidsrcme.ru/api.php';
 
-  // Backend proxy for React Native Hermes (no WebAssembly support)
+  // Backend proxy fallback for environments without WebAssembly
   var BACKEND_URL = 'https://backendmasterstream.onrender.com/api/cinejoy/vidsrcme';
 
   // In-memory WASM module cache by window ID (w)
@@ -32,7 +37,7 @@
     return bytes;
   }
 
-  async function getWasmModule(windowId, wasmUrl, wasmBase64) {
+  async function getWasmModule(windowId, wasmUrl, wasmBase64, referer) {
     var key = 'w_' + windowId;
     if (wasmModuleCache[key]) {
       return wasmModuleCache[key];
@@ -43,7 +48,7 @@
       promise = fetch(wasmUrl, {
         headers: {
           'User-Agent': USER_AGENT,
-          'Referer': REFERER,
+          'Referer': referer || VIDSRC_BASE + '/',
         },
       })
         .then(function (r) { return r.arrayBuffer(); })
@@ -59,10 +64,10 @@
     return promise;
   }
 
-  async function decryptStreamUrls(vs, encryptedB64) {
+  async function decryptStreamUrls(vs, encryptedB64, referer) {
     if (!vs || !encryptedB64) return [];
 
-    var modPromise = getWasmModule(vs.w, vs.wasm_url, vs.wasm);
+    var modPromise = getWasmModule(vs.w, vs.wasm_url, vs.wasm, referer);
     if (!modPromise) return [];
 
     var mod = await modPromise;
@@ -82,32 +87,32 @@
     return text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
-  // In-memory token cache by origin (JWT is valid for 4 hours)
+  // In-memory token cache by origin (JWT is valid for ~3.5 hours)
   var tokenCache = {};
 
-  async function fetchStreamToken(streamUrl) {
+  async function fetchStreamToken(streamUrl, referer, origin) {
     try {
       var u = new URL(streamUrl);
-      var origin = u.origin;
+      var streamOrigin = u.origin;
       var now = Math.floor(Date.now() / 1000);
-      var cached = tokenCache[origin];
+      var cached = tokenCache[streamOrigin];
       if (cached && cached.token && cached.exp > now + 300) {
         return cached.token;
       }
 
-      var tokenUrl = origin + '/generate.php';
+      var tokenUrl = streamOrigin + '/generate.php';
       var res = await fetch(tokenUrl, {
         headers: {
           'User-Agent': USER_AGENT,
-          'Referer': REFERER,
-          'Origin': REFERER.replace(/\/+$/, ''),
+          'Referer': referer,
+          'Origin': origin || new URL(referer).origin,
         },
       });
       if (!res.ok) return '';
       var text = (await res.text()).trim();
       if (!text || text.indexOf('eyJ') !== 0) return '';
 
-      tokenCache[origin] = {
+      tokenCache[streamOrigin] = {
         token: text,
         exp: now + 3.5 * 3600,
       };
@@ -117,7 +122,187 @@
     }
   }
 
-  /** Called when Hermes has no WebAssembly — delegates to backend for decryption, then mints token on client */
+  /** Direct extraction via vidsrc.sh */
+  async function extractDirect(id, isTv, season, episode) {
+    var embedUrl = isTv
+      ? VIDSRC_BASE + '/embed/tv/' + id + '/' + (season || 1) + '/' + (episode || 1)
+      : VIDSRC_BASE + '/embed/movie/' + id;
+
+    console.log(TAG + ' 🚀 Fetching embed page: ' + embedUrl);
+
+    // 1. Fetch vidsrc.sh embed page
+    var embedRes = await fetch(embedUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': VIDSRC_BASE + '/',
+      },
+    });
+    if (!embedRes.ok) {
+      console.warn(TAG + ' ❌ Embed HTTP ' + embedRes.status);
+      return null;
+    }
+    var embedHtml = await embedRes.text();
+
+    var apiMatch = embedHtml.match(/data-api="([^"]+)"/);
+    if (!apiMatch) {
+      console.warn(TAG + ' ❌ Could not find data-api in embed HTML');
+      return null;
+    }
+
+    var vsSrcPath = apiMatch[1].replace(/&amp;/g, '&');
+    var vsSrcUrl = vsSrcPath.indexOf('http') === 0 ? vsSrcPath : VIDSRC_BASE + vsSrcPath;
+
+    // 2. Fetch vs_src.php gate
+    var vsRes = await fetch(vsSrcUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': embedUrl,
+      },
+    });
+    if (!vsRes.ok) {
+      console.warn(TAG + ' ❌ vs_src HTTP ' + vsRes.status);
+      return null;
+    }
+    var vsJson = await vsRes.json();
+    if (!vsJson || !vsJson.src) {
+      console.warn(TAG + ' ❌ No landing src in vs_src response');
+      return null;
+    }
+
+    var landingUrl = vsJson.src;
+    var landingOrigin = new URL(landingUrl).origin;
+
+    // 3. Fetch landing page to get CFG.playerUrl
+    var landingRes = await fetch(landingUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': VIDSRC_BASE + '/',
+      },
+    });
+    if (!landingRes.ok) {
+      console.warn(TAG + ' ❌ Landing HTTP ' + landingRes.status);
+      return null;
+    }
+    var landingHtml = await landingRes.text();
+
+    var cfgMatch = landingHtml.match(/window\.CFG\s*=\s*({[^;]+});/) ||
+                   landingHtml.match(/window\.CFG\s*=\s*({[\s\S]*?});/);
+    if (!cfgMatch) {
+      console.warn(TAG + ' ❌ No window.CFG found in landing page');
+      return null;
+    }
+    var cfg = JSON.parse(cfgMatch[1]);
+    if (!cfg.playerUrl) {
+      console.warn(TAG + ' ❌ No playerUrl in CFG');
+      return null;
+    }
+
+    var playerUrl = cfg.playerUrl.indexOf('http') === 0 ? cfg.playerUrl : landingOrigin + cfg.playerUrl;
+
+    // 4. Fetch player page to get CONFIG.api and CONFIG.apiToken
+    var playerRes = await fetch(playerUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': landingUrl,
+      },
+    });
+    if (!playerRes.ok) {
+      console.warn(TAG + ' ❌ Player page HTTP ' + playerRes.status);
+      return null;
+    }
+    var playerHtml = await playerRes.text();
+
+    var configMatch = playerHtml.match(/window\.CONFIG\s*=\s*({[^;]+});/) ||
+                      playerHtml.match(/window\.CONFIG\s*=\s*({[\s\S]*?});/);
+    if (!configMatch) {
+      console.warn(TAG + ' ❌ No window.CONFIG found in player page');
+      return null;
+    }
+    var config = JSON.parse(configMatch[1]);
+    var streamApiUrl = config.api;
+    if (!streamApiUrl && config.streamBase) {
+      streamApiUrl = config.streamBase + '&season=' + encodeURIComponent(season || config.season || 1) + '&episode=' + encodeURIComponent(episode || config.episode || 1) + '&stream_urls';
+    }
+    if (!streamApiUrl) {
+      console.warn(TAG + ' ❌ No api/streamBase URL in CONFIG');
+      return null;
+    }
+
+    // 5. Call API with api_token
+    if (config.apiToken) {
+      streamApiUrl += (streamApiUrl.indexOf('?') > -1 ? '&' : '?') + 'api_token=' + encodeURIComponent(config.apiToken);
+    }
+
+    var streamApiRes = await fetch(streamApiUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': playerUrl,
+        'Origin': landingOrigin,
+        'Accept': 'application/json',
+      },
+    });
+    if (!streamApiRes.ok) {
+      console.warn(TAG + ' ❌ Stream API HTTP ' + streamApiRes.status);
+      return null;
+    }
+    var streamData = await streamApiRes.json();
+    if (!streamData || !streamData.data || !streamData.data.stream_urls) {
+      console.warn(TAG + ' ❌ No stream_urls in API response');
+      return null;
+    }
+
+    // 6. Decrypt stream URLs via ChaCha20 WASM
+    var streamUrls = [];
+    if (typeof streamData.data.stream_urls === 'string' && streamData.vs) {
+      streamUrls = await decryptStreamUrls(streamData.vs, streamData.data.stream_urls, playerUrl);
+    } else if (Array.isArray(streamData.data.stream_urls)) {
+      streamUrls = streamData.data.stream_urls;
+    }
+
+    if (!streamUrls || streamUrls.length === 0) {
+      console.warn(TAG + ' ❌ Decrypted stream URLs empty');
+      return null;
+    }
+
+    // 7. Mint stream token for playback
+    var primaryUrl = streamUrls[0];
+    var token = await fetchStreamToken(primaryUrl, playerUrl, landingOrigin);
+
+    var finalUrl = token
+      ? primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
+      : primaryUrl;
+
+    // Subtitles
+    var subtitles = [];
+    if (Array.isArray(streamData.default_subs)) {
+      for (var i = 0; i < streamData.default_subs.length; i++) {
+        var sub = streamData.default_subs[i];
+        if (sub && sub.url) {
+          subtitles.push({
+            url: sub.url,
+            lang: sub.language || sub.label || 'English',
+            label: sub.label || sub.language || 'English',
+          });
+        }
+      }
+    }
+
+    console.log(TAG + ' ✅ Extracted stream successfully');
+
+    return {
+      url: finalUrl,
+      quality: 'Auto',
+      provider: 'LordFlix',
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': playerUrl,
+        'Origin': landingOrigin,
+      },
+      subtitles: subtitles,
+    };
+  }
+
+  /** Backend fallback when Hermes has no WebAssembly */
   async function extractViaBackend(tmdbId, imdbId, isTv, season, episode) {
     try {
       var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
@@ -134,11 +319,8 @@
       var data = await res.json();
       if (!data || !data.url) return null;
 
-      // Strip any server-minted token (tokens are bound to the client's IP)
       var rawUrl = data.url.replace(/([?&])token=[^&]*/g, '').replace(/[?&]$/, '');
-
-      // Mint fresh token directly from the client device
-      var token = await fetchStreamToken(rawUrl);
+      var token = await fetchStreamToken(rawUrl, VIDSRC_BASE + '/', VIDSRC_BASE);
       var finalUrl = token
         ? rawUrl + (rawUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
         : rawUrl;
@@ -149,8 +331,7 @@
         provider: 'LordFlix',
         headers: data.headers || {
           'User-Agent': USER_AGENT,
-          'Referer': REFERER,
-          'Origin': REFERER.replace(/\/+$/, ''),
+          'Referer': VIDSRC_BASE + '/',
         },
         subtitles: data.subtitles || [],
       };
@@ -159,72 +340,42 @@
     }
   }
 
-  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
-    // ── 1. If WebAssembly is available (Android TV V8 / Node), try direct extraction first ──
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
+    // Calling convention detection:
+    //   4-param: (tmdbId, isTv, season, episode)
+    //   5-param: (tmdbId, imdbId, isTv, season, episode)
+    //   7-param: (tmdbId, imdbId, title, isTv, season, episode, year)
+    var imdbId, title, isTv, season, episode, year;
+
+    if (typeof arg1 === 'boolean') {
+      isTv = arg1; season = arg2; episode = arg3;
+    } else if (typeof arg2 === 'boolean') {
+      imdbId = arg1; isTv = arg2; season = arg3; episode = arg4;
+    } else {
+      imdbId = arg1; title = arg2; isTv = arg3; season = arg4; episode = arg5; year = arg6;
+    }
+
+    var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
+    var id = (imdbId && typeof imdbId === 'string' && imdbId.indexOf('tt') === 0) ? imdbId : tmdbId;
+
+    if (!id) {
+      console.warn(TAG + ' ❌ Missing both tmdbId and imdbId');
+      return null;
+    }
+
+    // 1. Direct WebAssembly extraction (V8 / Node.js / Android TV / Web)
     if (typeof WebAssembly !== 'undefined') {
       try {
-        var isTvShow = isTv === true || String(isTv) === 'true' || String(isTv) === 'tv';
-        var idParam;
-
-        if (imdbId && typeof imdbId === 'string' && imdbId.startsWith('tt')) {
-          idParam = 'imdb=' + encodeURIComponent(imdbId);
-        } else {
-          idParam = 'tmdb=' + encodeURIComponent(String(tmdbId));
-        }
-
-        var apiUrl = isTvShow
-          ? API_BASE + '?type=tv&' + idParam + '&season=' + (season || 1) + '&episode=' + (episode || 1) + '&stream_urls'
-          : API_BASE + '?type=movie&' + idParam + '&stream_urls';
-
-        var apiRes = await fetch(apiUrl, {
-          headers: {
-            'User-Agent': USER_AGENT,
-            'Referer': REFERER,
-            'Origin': REFERER.replace(/\/+$/, ''),
-            'Accept': 'application/json',
-          },
-        });
-
-        if (apiRes.ok) {
-          var json = await apiRes.json();
-          if (json && json.data && json.data.stream_urls) {
-            var streamUrls = [];
-            if (typeof json.data.stream_urls === 'string' && json.vs) {
-              streamUrls = await decryptStreamUrls(json.vs, json.data.stream_urls);
-            } else if (Array.isArray(json.data.stream_urls)) {
-              streamUrls = json.data.stream_urls;
-            }
-
-            if (streamUrls && streamUrls.length > 0) {
-              var primaryUrl = streamUrls[0];
-              var token = await fetchStreamToken(primaryUrl);
-
-              var finalUrl = token
-                ? primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
-                : primaryUrl;
-
-              return {
-                url: finalUrl,
-                quality: 'Auto',
-                provider: 'LordFlix',
-                headers: {
-                  'User-Agent': USER_AGENT,
-                  'Referer': REFERER,
-                  'Origin': REFERER.replace(/\/+$/, ''),
-                },
-                subtitles: [],
-              };
-            }
-          }
-        }
+        var directResult = await extractDirect(id, isTvShow, season, episode);
+        if (directResult) return directResult;
       } catch (directErr) {
-        // Direct extraction failed -> fallback to backend
+        console.warn(TAG + ' ⚠️ Direct extraction failed: ' + (directErr.message || directErr));
       }
     }
 
-    // ── 2. Fallback: Backend Proxy (Node.js WASM + Client IP token) ────────────────────────
+    // 2. Fallback: Backend Proxy
     try {
-      return await extractViaBackend(tmdbId, imdbId, isTv, season, episode);
+      return await extractViaBackend(tmdbId, imdbId, isTvShow, season, episode);
     } catch (err) {
       return null;
     }

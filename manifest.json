@@ -1,5 +1,5 @@
 {
-    "version":  287,
+    "version":  288,
     "providerPriority":  [
                              "LordFlix",
                              "VidFast",
@@ -83,7 +83,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "742F9DCA11B4A03BC0F60C387BEAD8B7",
+                                       "hash":  "7D9C2EC5E0FB8AF8E3627A472AD38A33",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

@@ -37,6 +37,38 @@
     return bytes;
   }
 
+  function fetchArrayBuffer(url, headers) {
+    if (typeof XMLHttpRequest !== 'undefined') {
+      return new Promise(function (resolve, reject) {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'arraybuffer';
+          if (headers) {
+            for (var k in headers) {
+              try { xhr.setRequestHeader(k, headers[k]); } catch (e) {}
+            }
+          }
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
+              resolve(xhr.response);
+            } else {
+              reject(new Error('XHR status ' + xhr.status));
+            }
+          };
+          xhr.onerror = function () { reject(new Error('XHR network error')); };
+          xhr.send();
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+    return fetch(url, { headers: headers }).then(function (r) {
+      if (typeof r.arrayBuffer === 'function') return r.arrayBuffer();
+      throw new Error('No arrayBuffer support');
+    });
+  }
+
   async function getWasmModule(windowId, wasmUrl, wasmBase64, referer) {
     var key = 'w_' + windowId;
     if (wasmModuleCache[key]) {
@@ -45,14 +77,10 @@
 
     var promise;
     if (wasmUrl) {
-      promise = fetch(wasmUrl, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Referer': referer || VIDSRC_BASE + '/',
-        },
-      })
-        .then(function (r) { return r.arrayBuffer(); })
-        .then(function (bytes) { return WebAssembly.compile(bytes); });
+      promise = fetchArrayBuffer(wasmUrl, {
+        'User-Agent': USER_AGENT,
+        'Referer': referer || VIDSRC_BASE + '/',
+      }).then(function (bytes) { return WebAssembly.compile(bytes); });
     } else if (wasmBase64) {
       var bytes = getBase64Bytes(wasmBase64);
       promise = WebAssembly.compile(bytes.buffer);
@@ -169,36 +197,54 @@
       return null;
     }
 
-    var landingUrl = vsJson.src;
-    var landingOrigin = new URL(landingUrl).origin;
+    var landingUrlsToTry = [];
+    if (vsJson.src.indexOf('cloudorchestranova.com') > -1) {
+      landingUrlsToTry.push(vsJson.src.replace('cloudorchestranova.com', 'stellarconductornexus.com'));
+      landingUrlsToTry.push(vsJson.src);
+    } else if (vsJson.src.indexOf('stellarconductornexus.com') > -1) {
+      landingUrlsToTry.push(vsJson.src);
+      landingUrlsToTry.push(vsJson.src.replace('stellarconductornexus.com', 'cloudorchestranova.com'));
+    } else {
+      landingUrlsToTry.push(vsJson.src);
+    }
+
+    var landingUrl = null;
+    var landingOrigin = null;
+    var cfg = null;
 
     // 3. Fetch landing page to get CFG.playerUrl
-    var landingRes = await fetch(landingUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': VIDSRC_BASE + '/',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Fetch-Dest': 'iframe',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'cross-site',
-      },
-    });
-    if (!landingRes.ok) {
-      console.warn(TAG + ' ❌ Landing HTTP ' + landingRes.status);
-      return null;
-    }
-    var landingHtml = await landingRes.text();
+    for (var li = 0; li < landingUrlsToTry.length; li++) {
+      var candidateUrl = landingUrlsToTry[li];
+      var candidateOrigin = new URL(candidateUrl).origin;
+      try {
+        var landingRes = await fetch(candidateUrl, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Referer': VIDSRC_BASE + '/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Fetch-Dest': 'iframe',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'cross-site',
+          },
+        });
+        if (!landingRes.ok) continue;
+        var landingHtml = await landingRes.text();
+        var cfgMatch = landingHtml.match(/window\.CFG\s*=\s*({[^;]+});/) ||
+                       landingHtml.match(/window\.CFG\s*=\s*({[\s\S]*?});/);
+        if (!cfgMatch) continue;
+        var parsedCfg = JSON.parse(cfgMatch[1]);
+        if (!parsedCfg.playerUrl) continue;
 
-    var cfgMatch = landingHtml.match(/window\.CFG\s*=\s*({[^;]+});/) ||
-                   landingHtml.match(/window\.CFG\s*=\s*({[\s\S]*?});/);
-    if (!cfgMatch) {
-      console.warn(TAG + ' ❌ No window.CFG found in landing page');
-      return null;
+        landingUrl = candidateUrl;
+        landingOrigin = candidateOrigin;
+        cfg = parsedCfg;
+        break;
+      } catch (err) {}
     }
-    var cfg = JSON.parse(cfgMatch[1]);
-    if (!cfg.playerUrl) {
-      console.warn(TAG + ' ❌ No playerUrl in CFG');
+
+    if (!landingUrl || !cfg) {
+      console.warn(TAG + ' ❌ No working landing page found');
       return null;
     }
 

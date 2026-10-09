@@ -139,7 +139,8 @@
   function unpackPACKED(html) {
     var packedStart = html.indexOf('eval(function(p,a,c,k,e,d)');
     if (packedStart === -1) return null;
-    var block = html.slice(packedStart, packedStart + 8000);
+    // Do NOT truncate — the key-array comes after the obfuscated body and can be very far away
+    var block = html.slice(packedStart);
     var m = block.match(/\}\('([\s\S]+?)',(\d+),(\d+),'([\s\S]+?)'\.split\('\|'\)/);
     if (!m) return null;
     var p = m[1], a = parseInt(m[2]), c = parseInt(m[3]);
@@ -221,8 +222,10 @@
     var regex = /<a\s+href="([^"]+)"\s+class="ss-title">([^<]+)<\/a>/g;
     var m;
     var best = null;
-    var bestScore = 0;
+    var bestScore = -1;
+    var count = 0;
     while ((m = regex.exec(html)) !== null) {
+      count++;
       var candidate = m[2].trim();
       var score = titleScore(rawTitle, candidate);
       if (score > bestScore) {
@@ -230,7 +233,11 @@
         best = { seriesUrl: m[1], title: candidate };
       }
     }
-    if (!best || bestScore === 0) return null;
+    // If there is exactly ONE result return it unconditionally — the search engine
+    // already matched it. If multiple, require at least some score.
+    if (!best) return null;
+    if (count === 1) return best;
+    if (bestScore <= 0) return null;
     return best;
   }
 
@@ -299,12 +306,15 @@
       }
     }
 
-    // Priority: kitraskimisi → engifuosi/filemoon → vidmoly → rest
-    // Reasoning:
-    //   - kitraskimisi (cfglobalcdn.com): direct m3u8, no Referer needed ✅
-    //   - engifuosi (5775765775.com): packed JS but m3u8 requires no Referer ✅
-    //   - vidmoly (vmnow.online): short-lived tokens, Referer required → validation fails ❌
-    return kitra.concat(engifuosi, vidmoly, others);
+    // Priority: engifuosi (server 2) → kitraskimisi (server 1) → vidmoly → rest
+    //
+    // Why engifuosi first?
+    //   - engifuosi.com (5775755774.com CDN): packed JS, but m3u8 returns HTTP 200 ✅
+    //     This is what yoturkish.to calls "Server 2" — most reliable for all content.
+    //   - kitraskimisi.com (cfglobalcdn.com): direct m3u8 in page source, BUT the CDN
+    //     frequently times out on mobile/TV connections → validation fails ❌
+    //   - vidmoly: short-lived tokens, Referer required → usually rejected ❌
+    return engifuosi.concat(kitra, vidmoly, others);
   }
 
   // ─── Main extraction entry-point ────────────────────────────────────────────

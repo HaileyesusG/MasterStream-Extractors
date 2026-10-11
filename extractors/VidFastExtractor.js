@@ -172,7 +172,7 @@
       console.log(TAG + ' 📡 Got ' + servers.length + ' servers: ' + serverNames);
 
       // Preferred server order — edit here to change priority (GitHub hot-update)
-      var PREFERRED_SERVERS = ['vRapid', 'vBlaze', 'Cobra', 'Cine', 'vFast', 'Charlie', 'Bravo', 'Horizon', 'Max', 'vEdge'];
+      var PREFERRED_SERVERS = ['vRapid', 'vBlaze', 'Cobra', 'Cine', 'Bravo', 'Horizon'];
       servers = servers.slice().sort(function(a, b) {
         var ai = PREFERRED_SERVERS.indexOf(a.name);
         var bi = PREFERRED_SERVERS.indexOf(b.name);

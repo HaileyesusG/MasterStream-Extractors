@@ -242,15 +242,27 @@
           console.log(TAG + ' 📡 [' + server.name + '] Referer: ' + streamReferer);
 
           var finalStreamUrl = resultObj.url;
+          var qualities = [];
 
           // If the extracted stream URL points to an HLS master playlist (e.g. ending in /index.m3u8),
           // some CDNs (like Bravo / Eclipse / qixno442run) serve the root /index.m3u8 with Content-Type: text/html
           // which causes mobile validateUrl() to reject it or timeout.
-          // Direct sub-playlists (/1080/index.m3u8 or /720/index.m3u8) return Content-Type: application/vnd.apple.mpegurl
-          // and play seamlessly in ExoPlayer / AVPlayer.
+          // We provide all available variant qualities (1080p, 720p, 480p, 360p) in the `qualities` list,
+          // while setting the primary validated stream `url` to 1080p (or highest available).
           if (typeof finalStreamUrl === 'string' && finalStreamUrl.indexOf('/index.m3u8') !== -1) {
-            finalStreamUrl = finalStreamUrl.replace(/\/index\.m3u8$/, '/1080/index.m3u8');
-            console.log(TAG + ' 🎯 Using direct quality child playlist: ' + finalStreamUrl.slice(0, 80));
+            var q1080 = finalStreamUrl.replace(/\/index\.m3u8$/, '/1080/index.m3u8');
+            var q720 = finalStreamUrl.replace(/\/index\.m3u8$/, '/720/index.m3u8');
+            var q480 = finalStreamUrl.replace(/\/index\.m3u8$/, '/480/index.m3u8');
+            var q360 = finalStreamUrl.replace(/\/index\.m3u8$/, '/360/index.m3u8');
+
+            qualities = [
+              { quality: '1080p', url: q1080 },
+              { quality: '720p',  url: q720 },
+              { quality: '480p',  url: q480 },
+              { quality: '360p',  url: q360 },
+            ];
+            finalStreamUrl = q1080;
+            console.log(TAG + ' 🎯 Generated ' + qualities.length + ' qualities (1080p, 720p, 480p, 360p)');
           }
 
           return {
@@ -259,6 +271,7 @@
             provider: 'VidFast-' + server.name,
             headers: playbackHeaders,
             subtitles: subtitles,
+            qualities: qualities,
           };
         } catch (err) {
           console.warn(TAG + ' ❌ ' + server.name + ' error: ' + (err.message || err));

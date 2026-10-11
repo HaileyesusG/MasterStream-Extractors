@@ -251,7 +251,15 @@
           }
         }
 
-        console.log(TAG + ' ✅ Stream extracted from server [' + srv.name + ']: ' + streamFileUrl.slice(0, 60) + '... (' + subtitlesList.length + ' subs)');
+        // If the extracted stream URL points to an HLS master playlist (e.g. ending in /index.m3u8),
+        // some CDNs (like Bravo / Eclipse / qixno442run) serve the root /index.m3u8 with Content-Type: text/html
+        // which causes mobile validateUrl() to reject it or timeout.
+        // Direct sub-playlists (/1080/index.m3u8 or /720/index.m3u8) return Content-Type: application/vnd.apple.mpegurl
+        // and play seamlessly in ExoPlayer / AVPlayer.
+        if (typeof streamFileUrl === 'string' && streamFileUrl.indexOf('/index.m3u8') !== -1) {
+          streamFileUrl = streamFileUrl.replace(/\/index\.m3u8$/, '/1080/index.m3u8');
+          console.log(TAG + ' 🎯 Using direct quality child playlist: ' + streamFileUrl.slice(0, 80));
+        }
 
         return {
           url: streamFileUrl,

@@ -1,5 +1,5 @@
 {
-    "version":  295,
+    "version":  296,
     "providerPriority":  [
                              "LordFlix",
                              "VidFast",
@@ -38,7 +38,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "041B1A15EA692D3A0A369A99114663BA",
+                                      "hash":  "7EDC71F13A0352D2F220276D1DB09FDC",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",

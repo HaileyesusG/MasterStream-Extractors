@@ -4,23 +4,40 @@
  *
  * Reference: https://github.com/smy778/EncDecEndpoints/blob/main/samples/videasy.py
  *
- * Servers (api.speedracelight.com):
- *   cdn    (Yoru)    = Original audio — may have 4K
- *   m4uhd  (Breach)  = Original audio
- *   vsrc   (Neon)    = Original audio
- *   hdmovie(Vyse)    = English only
- *   meine  (Killjoy) = German
- *   lamovie(Omen)    = Spanish
- *   superflix(Raze)  = Portuguese
+ * Servers (api.wecollege.net):
+ *   Miami      Original     https://api.wecollege.net/miami/sources [May have 4K]
+ *   Boise      Original     https://api.wecollege.net/boise/sources [May have 4K]
+ *   Vegas      Original     https://api.wecollege.net/vegas/sources
+ *   Reno       Original     https://api.wecollege.net/reno/sources
+ *   Oakland    Original     https://api.wecollege.net/oakland/sources
+ *   Seattle    Original     https://api.wecollege.net/seattle/sources
+ *   Phoenix    Original     https://api.wecollege.net/phoenix/sources
+ *   Atlanta    Original     https://api.wecollege.net/atlanta/sources
+ *   Portland   Original     https://api.wecollege.net/portland/sources
+ *   Austin     Original     https://api.wecollege.net/austin/sources [FILTERS quality == "English"]
+ *   Dallas     Original     https://api.wecollege.net/dallas/sources
+ *   Tampa      Original     https://api.wecollege.net/tampa/sources
+ *   Orlando    Original     https://api.wecollege.net/orlando/sources
  */
 (function () {
-  var TAG = '[VideasyExtractor]';
-  var DOMAIN = 'https://api.speedracelight.com';
-  var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+  'use strict';
 
-  // ── Media type support — change here to enable/disable for movies or TV ──
+  var TAG = '[VideasyExtractor]';
+  var DOMAIN = 'https://api.wecollege.net';
+  var DEC_API = 'https://enc-dec.app/api/dec-videasy';
+  var TMDB_API_KEY = 'a2dc7e427ce7dc4a54a518f239a51909';
+  var USER_AGENT =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+
   var SUPPORTS_MOVIE = true;
-  var SUPPORTS_TV    = true;
+  var SUPPORTS_TV = true;
+
+  var HEADERS = {
+    Accept: '*/*',
+    Origin: 'https://player.videasy.to',
+    Referer: 'https://player.videasy.to/',
+    'User-Agent': USER_AGENT,
+  };
 
   async function fetchGet(url, headers) {
     try {
@@ -31,7 +48,7 @@
       }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' Network error: ' + e.message);
+      console.warn(TAG + ' Network error: ' + (e.message || e));
       return null;
     }
   }
@@ -50,22 +67,121 @@
       }
       return await response.text();
     } catch (e) {
-      console.warn(TAG + ' Network error POST: ' + e.message);
+      console.warn(TAG + ' Network error POST: ' + (e.message || e));
       return null;
     }
   }
 
-  async function extract(tmdbId, imdbId, title, isTv, season, episode, year) {
-    try {
-      if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' ⏭️ Skipping — TV not supported'); return null; }
-      if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' ⏭️ Skipping — Movies not supported'); return null; }
+  async function resolveMetadata(tmdbId, isTv, existingTitle, existingYear) {
+    var title = existingTitle;
+    var year = existingYear;
+    if (title && year) return { title: title, year: year };
 
-      var headers = {
-        'User-Agent': USER_AGENT,
-        Referer: 'https://player.videasy.to/',
-        Origin: 'https://player.videasy.to',
-        Accept: '*/*',
-      };
+    try {
+      var ep = isTv ? 'tv/' : 'movie/';
+      var url = 'https://api.themoviedb.org/3/' + ep + tmdbId + '?api_key=' + TMDB_API_KEY;
+      var res = await fetch(url);
+      if (res.ok) {
+        var data = await res.json();
+        if (!title) {
+          title = isTv ? (data.name || data.original_name) : (data.title || data.original_title);
+        }
+        if (!year) {
+          var dateStr = isTv ? data.first_air_date : data.release_date;
+          if (dateStr && dateStr.length >= 4) {
+            year = dateStr.slice(0, 4);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return { title: title || '', year: year || '' };
+  }
+
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
+    var isTv, season, episode, title, imdbId, year;
+
+    // Detect calling convention:
+    // Mobile 4-param: (tmdbId, isTv, season, episode)
+    // Mobile 5-param: (tmdbId, imdbId, isTv, season, episode)
+    // TV / Full 7-param: (tmdbId, imdbId, title, isTv, season, episode, year)
+    if (typeof arg1 === 'boolean') {
+      isTv = arg1;
+      season = arg2;
+      episode = arg3;
+      imdbId = null;
+      title = null;
+      year = null;
+    } else if (typeof arg2 === 'boolean') {
+      imdbId = arg1;
+      isTv = arg2;
+      season = arg3;
+      episode = arg4;
+      title = null;
+      year = null;
+    } else {
+      imdbId = arg1;
+      title = typeof arg2 === 'string' ? arg2 : null;
+      isTv = arg3;
+      season = arg4;
+      episode = arg5;
+      year = arg6;
+    }
+
+    try {
+      if (isTv && !SUPPORTS_TV) {
+        console.log(TAG + ' ⏭️ Skipping — TV not supported');
+        return null;
+      }
+      if (!isTv && !SUPPORTS_MOVIE) {
+        console.log(TAG + ' ⏭️ Skipping — Movies not supported');
+        return null;
+      }
+
+      var meta = await resolveMetadata(tmdbId, isTv, title, year);
+      title = meta.title;
+      year = meta.year;
+
+      // Step 1: Fetch seed (required for enc=2 API)
+      console.log(TAG + ' 🌱 Fetching seed for tmdbId=' + tmdbId);
+      var seedRaw = await fetchGet(DOMAIN + '/seed?mediaId=' + tmdbId, HEADERS);
+      if (!seedRaw) {
+        console.warn(TAG + ' ❌ Failed to get seed');
+        return null;
+      }
+      var seedJson;
+      try {
+        seedJson = JSON.parse(seedRaw);
+      } catch (_) {
+        console.warn(TAG + ' ❌ Invalid seed JSON');
+        return null;
+      }
+      var seed = seedJson.seed;
+      if (!seed) {
+        console.warn(TAG + ' ❌ Seed missing in response');
+        return null;
+      }
+      console.log(TAG + ' ✅ Got seed: ' + seed);
+
+      // Step 2: Double-encode title (as required by videasy API sample)
+      var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
+
+      // Available servers list from videasy sample
+      var servers = [
+        'miami',
+        'boise',
+        'vegas',
+        'reno',
+        'oakland',
+        'seattle',
+        'phoenix',
+        'atlanta',
+        'portland',
+        'austin',
+        'dallas',
+        'tampa',
+        'orlando',
+      ];
 
       var decryptHeaders = {
         'Content-Type': 'application/json',
@@ -73,115 +189,131 @@
         'User-Agent': USER_AGENT,
         Referer: 'https://player.videasy.to/',
       };
-      var decryptUrl = 'https://enc-dec.app/api/dec-videasy';
-
-      // Step 1: Fetch seed (required for enc=2 API)
-      console.log(TAG + ' 🌱 Fetching seed for tmdbId=' + tmdbId);
-      var seedRaw = await fetchGet(DOMAIN + '/seed?mediaId=' + tmdbId, headers);
-      if (!seedRaw) { console.warn(TAG + ' ❌ Failed to get seed'); return null; }
-      var seedJson;
-      try { seedJson = JSON.parse(seedRaw); } catch (_) { console.warn(TAG + ' ❌ Invalid seed JSON'); return null; }
-      var seed = seedJson.seed;
-      if (!seed) { console.warn(TAG + ' ❌ Seed missing in response'); return null; }
-      console.log(TAG + ' ✅ Got seed: ' + seed);
-
-      // Step 2: Double-encode title (intentional — API expects this format)
-      var encTitle = encodeURIComponent(encodeURIComponent(title || ''));
-
-      // Servers ordered by quality/priority. cdn(Yoru) first for potential 4K.
-      // vsrc(Neon) is new, listed before old servers.
-      var servers = ['cdn', 'm4uhd', 'vsrc', 'downloader2', 'hdmovie', 'lamovie', 'superflix'];
 
       for (var i = 0; i < servers.length; i++) {
         var server = servers[i];
 
-        // cdn (Yoru) is movies only
-        // if (server === 'cdn' && isTv) {
-        //   console.log(TAG + ' [' + server + '] Skipping — movies only server');
-        //   continue;
-        // }
-
         var url =
-          DOMAIN + '/' + server + '/sources-with-title' +
-          '?title=' + encTitle +
-          '&mediaType=' + (isTv ? 'tv' : 'movie') +
-          '&year=' + (year || '') +
-          '&tmdbId=' + tmdbId +
-          '&imdbId=' + (imdbId || '') +
+          DOMAIN +
+          '/' +
+          server +
+          '/sources?title=' +
+          encTitle +
+          '&mediaType=' +
+          (isTv ? 'tv' : 'movie') +
+          '&year=' +
+          (year || '') +
+          '&tmdbId=' +
+          tmdbId +
+          '&imdbId=' +
+          (imdbId || '') +
           '&enc=2' +
-          '&seed=' + seed;
+          '&seed=' +
+          seed;
 
-        if (isTv) url += '&episodeId=' + episode + '&seasonId=' + season;
+        if (isTv) {
+          url += '&episodeId=' + (episode || 1) + '&seasonId=' + (season || 1);
+        }
 
         console.log(TAG + ' [' + server + '] Fetching sources...');
-        var textDetail = await fetchGet(url, headers);
+        var textDetail = await fetchGet(url, HEADERS);
 
         if (!textDetail || textDetail.trim() === '') {
-          console.warn(TAG + ' [' + server + '] Empty response — trying next server');
           continue;
         }
-        console.log(TAG + ' [' + server + '] Got encrypted data (len=' + textDetail.length + ')');
 
-        // Step 4: Decrypt — send text + id + seed
+        // Decrypt sources payload
         var decryptResponse = await fetchPost(
-          decryptUrl,
+          DEC_API,
           JSON.stringify({ text: textDetail, id: tmdbId, seed: seed }),
           decryptHeaders
         );
         if (!decryptResponse) {
-          console.warn(TAG + ' [' + server + '] Decrypt failed — trying next server');
           continue;
         }
 
         var decryptJson;
-        try { decryptJson = JSON.parse(decryptResponse); } catch (_) {
-          console.warn(TAG + ' [' + server + '] Invalid decrypt JSON — trying next server');
+        try {
+          decryptJson = JSON.parse(decryptResponse);
+        } catch (_) {
           continue;
         }
 
-        var result = decryptJson && decryptJson.result;
-        var sources = result && result.sources;
-
-        if (!Array.isArray(sources) || sources.length === 0) {
-          console.warn(TAG + ' [' + server + '] No sources — trying next server');
+        if (!decryptJson || decryptJson.status !== 200 || !decryptJson.result) {
           continue;
         }
 
-        var directQuality = [];
-        for (var j = 0; j < sources.length; j++) {
-          var source = sources[j];
-          var sourceUrl = source.url || '';
-          var qualityStr = source.quality || '1080';
-          var qualityMatch = qualityStr.toString().match(/(\d+)/);
-          var quality = qualityMatch ? parseInt(qualityMatch[1], 10) : 1080;
-          if (sourceUrl) directQuality.push({ file: sourceUrl, quality: quality });
+        var result = decryptJson.result;
+        var rawSources = result.sources;
+        if (!Array.isArray(rawSources) || rawSources.length === 0) {
+          continue;
         }
 
-        var subtitlesList = [];
-        if (Array.isArray(result.subtitles)) {
-          for (var k = 0; k < result.subtitles.length; k++) {
-            var sub = result.subtitles[k];
-            var subUrl = sub.url || '';
-            var lang = sub.language || sub.label || 'Unknown';
-            if (subUrl) subtitlesList.push({ url: subUrl, lang: lang, label: lang });
+        // For Austin server, prefer English source if present
+        if (server === 'austin') {
+          var engSource = rawSources.filter(function (s) {
+            return (s.quality || '').toLowerCase() === 'english';
+          });
+          if (engSource.length > 0) {
+            rawSources = engSource;
           }
         }
 
+        // Parse qualities
+        var directQuality = [];
+        for (var j = 0; j < rawSources.length; j++) {
+          var source = rawSources[j];
+          var sourceUrl = source.url || '';
+          if (!sourceUrl) continue;
+
+          // If qixno442run index.m3u8, convert to child playlist to prevent text/html validation block
+          if (sourceUrl.indexOf('/index.m3u8') !== -1) {
+            sourceUrl = sourceUrl.replace(/\/index\.m3u8$/, '/1080/index.m3u8');
+          }
+
+          var qualityStr = source.quality || '1080';
+          var qualityMatch = qualityStr.toString().match(/(\d+)/);
+          var qualityNum = qualityMatch ? parseInt(qualityMatch[1], 10) : 1080;
+          directQuality.push({ file: sourceUrl, quality: qualityNum, label: qualityStr });
+        }
+
         if (directQuality.length === 0) {
-          console.warn(TAG + ' [' + server + '] No valid quality variants — trying next server');
           continue;
         }
 
-        directQuality.sort(function (a, b) { return b.quality - a.quality; });
+        directQuality.sort(function (a, b) {
+          return b.quality - a.quality;
+        });
+
         var parsedQualities = directQuality.map(function (q) {
           return { url: q.file, quality: q.quality + 'p' };
         });
 
-        console.log(TAG + ' [' + server + '] ✅ Found ' + parsedQualities.length + ' sources + ' + subtitlesList.length + ' subtitles');
+        // Parse subtitles
+        var subtitlesList = [];
+        if (Array.isArray(result.subtitles)) {
+          for (var k = 0; k < result.subtitles.length; k++) {
+            var sub = result.subtitles[k];
+            var subUrl = sub.url || sub.file || '';
+            var lang = sub.language || sub.label || sub.name || 'Unknown';
+            if (subUrl) subtitlesList.push({ url: subUrl, lang: lang, label: lang });
+          }
+        }
+
+        console.log(
+          TAG +
+            ' ✅ [' +
+            server +
+            '] Found ' +
+            parsedQualities.length +
+            ' sources + ' +
+            subtitlesList.length +
+            ' subtitles'
+        );
 
         return {
           url: parsedQualities[0].url,
-          quality: parsedQualities[0].quality,
+          quality: 'Auto',
           qualities: parsedQualities,
           provider: 'Videasy',
           headers: {
@@ -196,10 +328,26 @@
       console.warn(TAG + ' ⚠️ All Videasy servers exhausted');
       return null;
     } catch (e) {
-      console.error(TAG + ' Error during extraction', e);
+      console.error(TAG + ' Error during extraction: ' + (e.message || e));
       return null;
     }
   }
 
-  module.exports = { extract: extract };
+  var extractorObj = { extract: extract };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = extractorObj;
+  }
+
+  var gObj =
+    typeof globalThis !== 'undefined'
+      ? globalThis
+      : typeof window !== 'undefined'
+      ? window
+      : typeof global !== 'undefined'
+      ? global
+      : this;
+  if (gObj) {
+    gObj.VideasyExtractor = extractorObj;
+  }
 })();

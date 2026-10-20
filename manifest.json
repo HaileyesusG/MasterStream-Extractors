@@ -1,5 +1,5 @@
 {
-    "version":  299,
+    "version":  300,
     "providerPriority":  [
                              "LordFlix",
                              "VidFast",
@@ -29,7 +29,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "E546AB4E2A4C48A6C0C8B412504F6C03",
+                                       "hash":  "2702694ADC607D5FCCC094F6A5EA5FC4",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -56,7 +56,7 @@
                                   },
                       "Vidlink":  {
                                       "file":  "extractors/VidlinkExtractor.js",
-                                      "hash":  "E6170DCB7E40D20D3DF4DF7B8A6DFF00",
+                                      "hash":  "E4CFD5D5C3AA893562C013063CCF7AA6",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",

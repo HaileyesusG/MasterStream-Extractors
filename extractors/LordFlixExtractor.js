@@ -128,23 +128,73 @@
         return cached.token;
       }
 
-      var tokenUrl = streamOrigin + '/generate.php';
-      var res = await fetch(tokenUrl, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Referer': referer,
-          'Origin': origin || new URL(referer).origin,
-        },
-      });
-      if (!res.ok) return '';
-      var text = (await res.text()).trim();
-      if (!text || text.indexOf('eyJ') !== 0) return '';
+      // Candidate token endpoints:
+      // 1. Plain HTTP first: On Android TV, OkHttpClient's FetchBridge throws
+      //    "Chain validation failed" on HTTPS due to outdated system root CA stores.
+      //    Plain HTTP connects without TLS handshake, completely avoiding SSL failure.
+      // 2. HTTPS as fallback (works in browsers / Node / modern mobile).
+      var candidateUrls = [
+        streamOrigin.replace(/^https:/i, 'http:') + '/generate.php',
+        streamOrigin + '/generate.php',
+      ];
 
-      tokenCache[streamOrigin] = {
-        token: text,
-        exp: now + 3.5 * 3600,
+      var headers = {
+        'User-Agent': USER_AGENT,
+        'Referer': referer,
+        'Origin': origin || new URL(referer).origin,
       };
-      return text;
+
+      for (var i = 0; i < candidateUrls.length; i++) {
+        var tokenUrl = candidateUrls[i];
+        try {
+          var res = await fetch(tokenUrl, { headers: headers });
+          if (res && res.ok) {
+            var text = (await res.text()).trim();
+            if (text && text.indexOf('eyJ') === 0) {
+              tokenCache[streamOrigin] = {
+                token: text,
+                exp: now + 3.5 * 3600,
+              };
+              return text;
+            }
+          }
+        } catch (fetchErr) {
+          console.warn(TAG + ' ⚠️ Failed token fetch from ' + tokenUrl + ': ' + (fetchErr.message || fetchErr));
+        }
+
+        // Also try native XMLHttpRequest (bypasses FetchBridge, uses Chromium's own cert store)
+        try {
+          var xhrText = await new Promise(function (resolve) {
+            try {
+              if (typeof XMLHttpRequest === 'undefined') return resolve('');
+              var xhr = new XMLHttpRequest();
+              xhr.open('GET', tokenUrl, true);
+              xhr.timeout = 5000;
+              xhr.onload = function () {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  resolve((xhr.responseText || '').trim());
+                } else {
+                  resolve('');
+                }
+              };
+              xhr.onerror = function () { resolve(''); };
+              xhr.ontimeout = function () { resolve(''); };
+              xhr.send();
+            } catch (xe) {
+              resolve('');
+            }
+          });
+          if (xhrText && xhrText.indexOf('eyJ') === 0) {
+            tokenCache[streamOrigin] = {
+              token: xhrText,
+              exp: now + 3.5 * 3600,
+            };
+            return xhrText;
+          }
+        } catch (xhrErr) {}
+      }
+
+      return '';
     } catch (e) {
       return '';
     }
@@ -324,9 +374,12 @@
     var primaryUrl = streamUrls[0];
     var token = await fetchStreamToken(primaryUrl, playerUrl, landingOrigin);
 
-    var finalUrl = token
-      ? primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
-      : primaryUrl;
+    if (!token) {
+      console.warn(TAG + ' ⚠️ Token mint failed (generate.php unavailable) — rejecting direct result');
+      return null;
+    }
+
+    var finalUrl = primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token);
 
     // Subtitles
     var subtitles = [];
@@ -377,9 +430,15 @@
 
       var rawUrl = data.url.replace(/([?&])token=[^&]*/g, '').replace(/[?&]$/, '');
       var token = await fetchStreamToken(rawUrl, VIDSRC_BASE + '/', VIDSRC_BASE);
-      var finalUrl = token
-        ? rawUrl + (rawUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token)
-        : rawUrl;
+      if (!token && data.url.indexOf('token=') > -1) {
+        var match = data.url.match(/[?&]token=([^&]+)/);
+        if (match) token = decodeURIComponent(match[1]);
+      }
+      if (!token) {
+        console.warn(TAG + ' ⚠️ Backend stream has no valid token — rejecting');
+        return null;
+      }
+      var finalUrl = rawUrl + (rawUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token);
 
       return {
         url: finalUrl,

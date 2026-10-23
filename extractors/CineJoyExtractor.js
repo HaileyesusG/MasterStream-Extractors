@@ -2,7 +2,8 @@
  * Vidly / CineJoy Extractor
  * Powered by https://vidly.pro
  *
- * Supports movies, TV series, multi-audio HLS streams and multi-language subtitles.
+ * Supports movies, TV series, multi-audio separate streams (mapped to audioTracks),
+ * native HLS resolution variants (mapped to qualities), and multi-language subtitles.
  * Remote hot-update CommonJS module for Android TV and React Native Mobile.
  */
 (function () {
@@ -175,7 +176,11 @@
 
       var html = await pageRes.text();
 
-      // Find all encrypted v1. payloads in page HTML / Next.js chunks
+      // Extract session token from HTML script props
+      var tokenMatch = html.match(/\\*"token\\*":\s*\\*"([^\\"]+)/);
+      var token = tokenMatch ? tokenMatch[1] : null;
+
+      // Find all encrypted v1. payloads in page HTML
       var v1Matches = html.match(/v1\.[a-zA-Z0-9_-]{50,}/g) || [];
       var streams = [];
       var servers = [];
@@ -188,6 +193,51 @@
           }
           if (Array.isArray(data.servers) && servers.length === 0) {
             servers = data.servers;
+          }
+        }
+      }
+
+      // If initial streams don't have multi-audio languages, query MULTI servers (Prism / Citadel)
+      var hasMultiAudio = false;
+      for (var si = 0; si < streams.length; si++) {
+        if (streams[si].language && streams[si].language.toLowerCase() !== 'undefined') {
+          hasMultiAudio = true;
+          break;
+        }
+      }
+
+      if (!hasMultiAudio && token && servers.length > 0) {
+        for (var svi = 0; svi < servers.length; svi++) {
+          var sItem = servers[svi];
+          var sId = (sItem && sItem.id) || sItem;
+          var sTag = sItem && sItem.tag ? String(sItem.tag).toUpperCase() : '';
+          if (sTag === 'MULTI' || sId === 'prism' || sId === 'citadel') {
+            try {
+              var qParams = 'kind=' + (isTvShow ? 'tv' : 'movie') +
+                '&provider=' + encodeURIComponent(sId) +
+                '&t=' + encodeURIComponent(token) +
+                '&tmdb=' + encodeURIComponent(id);
+              if (isTvShow) {
+                qParams += '&season=' + encodeURIComponent(season || 1) +
+                  '&episode=' + encodeURIComponent(episode || 1);
+              }
+              var sRes = await fetch(DOMAIN + '/api/sources?' + qParams, {
+                headers: {
+                  'User-Agent': USER_AGENT,
+                  Referer: pageUrl,
+                  Origin: DOMAIN,
+                },
+              });
+              if (sRes.ok) {
+                var sText = await sRes.text();
+                var sData = decryptPayload(sText);
+                if (sData && Array.isArray(sData.streams) && sData.streams.length > 0) {
+                  streams = streams.concat(sData.streams);
+                }
+              }
+            } catch (svErr) {
+              // Ignore single server query error
+            }
           }
         }
       }
@@ -210,68 +260,106 @@
         return null;
       }
 
-      // Choose best primary stream: prefer English if available, otherwise first stream
-      var primaryStream = streams[0];
-      for (var si = 0; si < streams.length; si++) {
-        var curStream = streams[si];
-        if (
-          curStream &&
-          curStream.language &&
-          String(curStream.language).toLowerCase() === 'english'
-        ) {
-          primaryStream = curStream;
-          break;
+      // Group all streams by audio language:
+      // Map: language -> [{ quality: '1080p', url: '...' }]
+      var langMap = {};
+      var langOrder = [];
+      var seenStreamUrls = {};
+
+      for (var stIdx = 0; stIdx < streams.length; stIdx++) {
+        var sObj = streams[stIdx];
+        if (!sObj || !sObj.url) continue;
+        var sUrl = sObj.url.replace(/&amp;/g, '&').replace(/\\u0026/g, '&');
+        if (seenStreamUrls[sUrl]) continue;
+        seenStreamUrls[sUrl] = true;
+
+        var rawLang = (sObj.language || '').trim();
+        if (!rawLang || rawLang.toLowerCase() === 'undefined') {
+          if (sObj.label && sObj.label.indexOf('·') !== -1) {
+            rawLang = sObj.label.split('·')[0].trim();
+          } else {
+            rawLang = 'English';
+          }
         }
+        // Normalize language label
+        var langName = rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
+        if (langName.toLowerCase() === 'original') {
+          langName = 'English';
+        }
+
+        if (!langMap[langName]) {
+          langMap[langName] = [];
+          langOrder.push(langName);
+        }
+
+        var qLabel = sObj.quality || 'Auto';
+        langMap[langName].push({
+          quality: qLabel,
+          url: sUrl,
+        });
       }
 
-      // Build quality options from all available streams
-      var qualities = [];
-      var seenUrls = {};
-      for (var qi = 0; qi < streams.length; qi++) {
-        var sObj = streams[qi];
-        if (sObj && sObj.url && !seenUrls[sObj.url]) {
-          seenUrls[sObj.url] = true;
-          var qLabel = sObj.language
-            ? sObj.language + (sObj.quality ? ' · ' + sObj.quality : '')
-            : sObj.quality || sObj.label || 'Auto';
-          qualities.push({
-            quality: qLabel,
-            url: sObj.url.replace(/&amp;/g, '&').replace(/\\u0026/g, '&'),
+      // Sort audio languages so English is ALWAYS FIRST at index 0
+      langOrder.sort(function (a, b) {
+        var aIsEng = a.toLowerCase().indexOf('english') === 0;
+        var bIsEng = b.toLowerCase().indexOf('english') === 0;
+        if (aIsEng && !bIsEng) return -1;
+        if (!aIsEng && bIsEng) return 1;
+        return a.localeCompare(b);
+      });
+
+      // Build AudioTrackVariant array for Mobile and TV app
+      var audioTracks = [];
+      for (var lo = 0; lo < langOrder.length; lo++) {
+        var lKey = langOrder[lo];
+        var qArr = langMap[lKey];
+        if (qArr && qArr.length > 0) {
+          audioTracks.push({
+            language: lKey,
+            url: qArr[0].url,
+            qualities: qArr,
           });
         }
       }
+
+      // Choose primary audio track (English is guaranteed at index 0)
+      var primaryTrack = audioTracks[0];
+      var primaryUrl = primaryTrack.url;
+      // Qualities array should ONLY contain video resolutions for the primary stream!
+      var primaryQualities = primaryTrack.qualities;
 
       // Fetch full subtitle catalog from /api/subtitles
       var subtitles = [];
       var seenSubUrls = {};
 
-      // 1. Add inline subtitles from primaryStream (if any)
-      if (Array.isArray(primaryStream.subtitles)) {
-        for (var psi = 0; psi < primaryStream.subtitles.length; psi++) {
-          var pSub = primaryStream.subtitles[psi];
-          if (pSub && pSub.url && !seenSubUrls[pSub.url]) {
-            seenSubUrls[pSub.url] = true;
-            subtitles.push({
-              url: pSub.url,
-              lang: pSub.lang || pSub.label || 'English',
-              label: pSub.label || pSub.lang || 'English',
-            });
+      // 1. Add subtitles embedded in streams
+      for (var sc = 0; sc < streams.length; sc++) {
+        var strItem = streams[sc];
+        if (strItem && Array.isArray(strItem.subtitles)) {
+          for (var psubi = 0; psubi < strItem.subtitles.length; psubi++) {
+            var subObj = strItem.subtitles[psubi];
+            if (subObj && subObj.url && !seenSubUrls[subObj.url]) {
+              seenSubUrls[subObj.url] = true;
+              subtitles.push({
+                url: subObj.url,
+                lang: subObj.lang || subObj.label || 'English',
+                label: subObj.label || subObj.lang || 'English',
+              });
+            }
           }
         }
       }
 
       // 2. Fetch all external subtitles via /api/subtitles
       try {
-        var subParams = new URLSearchParams({
-          kind: isTvShow ? 'tv' : 'movie',
-          tmdb: String(id),
-        });
+        var subParams = 'kind=' + (isTvShow ? 'tv' : 'movie') +
+          '&tmdb=' + encodeURIComponent(id);
         if (isTvShow) {
-          subParams.set('s', String(season || 1));
-          subParams.set('e', String(episode || 1));
+          subParams += '&s=' + encodeURIComponent(season || 1) +
+            '&e=' + encodeURIComponent(episode || 1);
         }
 
-        var subRes = await fetch(DOMAIN + '/api/subtitles?' + subParams.toString(), {
+        var subRes = await fetch(DOMAIN + '/api/subtitles?' + subParams, {
           headers: {
             'User-Agent': USER_AGENT,
             Referer: pageUrl,
@@ -283,13 +371,13 @@
           var subData = await subRes.json();
           if (subData && Array.isArray(subData.subtitles)) {
             for (var sj = 0; sj < subData.subtitles.length; sj++) {
-              var sItem = subData.subtitles[sj];
-              if (sItem && sItem.url && !seenSubUrls[sItem.url]) {
-                seenSubUrls[sItem.url] = true;
+              var sSub = subData.subtitles[sj];
+              if (sSub && sSub.url && !seenSubUrls[sSub.url]) {
+                seenSubUrls[sSub.url] = true;
                 subtitles.push({
-                  url: sItem.url,
-                  lang: sItem.lang || sItem.label || 'Unknown',
-                  label: sItem.label || sItem.lang || 'Unknown',
+                  url: sSub.url,
+                  lang: sSub.lang || sSub.label || 'Unknown',
+                  label: sSub.label || sSub.lang || 'Unknown',
                 });
               }
             }
@@ -299,21 +387,22 @@
         // Subtitles are non-fatal
       }
 
-      var finalUrl = primaryStream.url.replace(/&amp;/g, '&').replace(/\\u0026/g, '&');
       console.log(
         TAG +
           ' ✅ Extracted vidly stream: ' +
-          finalUrl.slice(0, 60) +
-          '... (qualities: ' +
-          qualities.length +
+          primaryUrl.slice(0, 60) +
+          '... (audioTracks: ' +
+          audioTracks.length +
+          ', qualities: ' +
+          primaryQualities.length +
           ', subtitles: ' +
           subtitles.length +
           ')'
       );
 
       return {
-        url: finalUrl,
-        quality: primaryStream.quality || 'Auto',
+        url: primaryUrl,
+        quality: 'Auto',
         provider: 'CineJoy',
         headers: {
           'User-Agent': USER_AGENT,
@@ -321,7 +410,8 @@
           Origin: DOMAIN,
         },
         subtitles: subtitles,
-        qualities: qualities,
+        qualities: primaryQualities,
+        audioTracks: audioTracks.length > 1 ? audioTracks : undefined,
       };
     } catch (err) {
       console.error(TAG + ' ❌ Extraction failed: ' + (err.message || err));

@@ -299,12 +299,29 @@
         });
       }
 
-      // Sort audio languages so English is ALWAYS FIRST at index 0
+      // Sort audio languages: English is FIRST. If English is not listed, French is default at index 0.
       langOrder.sort(function (a, b) {
-        var aIsEng = a.toLowerCase().indexOf('english') === 0;
-        var bIsEng = b.toLowerCase().indexOf('english') === 0;
+        var aLow = a.toLowerCase();
+        var bLow = b.toLowerCase();
+        var aIsEng = aLow.indexOf('english') === 0;
+        var bIsEng = bLow.indexOf('english') === 0;
         if (aIsEng && !bIsEng) return -1;
         if (!aIsEng && bIsEng) return 1;
+        if (aIsEng && bIsEng) return a.localeCompare(b);
+
+        var aIsFr =
+          aLow.indexOf('french') === 0 ||
+          aLow.indexOf('français') === 0 ||
+          aLow.indexOf('francais') === 0 ||
+          aLow === 'fr';
+        var bIsFr =
+          bLow.indexOf('french') === 0 ||
+          bLow.indexOf('français') === 0 ||
+          bLow.indexOf('francais') === 0 ||
+          bLow === 'fr';
+        if (aIsFr && !bIsFr) return -1;
+        if (!aIsFr && bIsFr) return 1;
+
         return a.localeCompare(b);
       });
 
@@ -452,6 +469,8 @@
             spanish: 'es',
             esla: 'es',
             french: 'fr',
+            francais: 'fr',
+            'français': 'fr',
             kannada: 'kn',
             malayalam: 'ml',
             portuguese: 'pt',

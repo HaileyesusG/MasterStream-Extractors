@@ -322,94 +322,242 @@
         }
       }
 
-      // Helper to discover all resolution variants (1080p, 720p, 480p) from an HLS master playlist
-      async function parseM3u8Qualities(masterUrl) {
-        if (!masterUrl || masterUrl.indexOf('.m3u8') === -1) return [];
-        try {
-          var res = await fetch(masterUrl, {
-            headers: {
-              'User-Agent': USER_AGENT,
-              Referer: DOMAIN + '/',
-              Origin: DOMAIN,
-            },
-          });
-          if (!res.ok) return [];
-          var text = await res.text();
-          var lines = text.split('\n');
-          var list = [];
-          var seen = {};
+      var BACKEND_URL = 'https://backendmasterstream.onrender.com';
 
-          for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim();
-            if (line.indexOf('#EXT-X-STREAM-INF:') === 0) {
-              var resMatch = line.match(/RESOLUTION=(\d+x\d+)/i);
-              var bwMatch = line.match(/BANDWIDTH=(\d+)/i);
-              var nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-              if (nextLine && nextLine.indexOf('#') !== 0) {
-                var absUrl = nextLine;
-                try {
-                  absUrl = new URL(nextLine, masterUrl).href;
-                } catch (e) {
-                  if (nextLine.indexOf('http') !== 0) {
-                    var lastSlash = masterUrl.lastIndexOf('/');
-                    absUrl = masterUrl.substring(0, lastSlash + 1) + nextLine;
-                  }
-                }
-
-                var qLabel = '1080p';
-                if (resMatch) {
-                  var parts = resMatch[1].split('x');
-                  var h = parts[1] || parts[0];
-                  qLabel = h + 'p';
-                } else if (bwMatch) {
-                  var bw = parseInt(bwMatch[1], 10);
-                  if (bw > 3000000) qLabel = '1080p';
-                  else if (bw > 1500000) qLabel = '720p';
-                  else if (bw > 600000) qLabel = '480p';
-                  else qLabel = '360p';
-                }
-
-                if (!seen[qLabel]) {
-                  seen[qLabel] = true;
-                  list.push({ quality: qLabel, url: absUrl });
-                }
-              }
-            }
+      // Helper to extract audio URI from an m3u8 playlist text
+      function extractAudioUri(m3u8Text, masterUrl) {
+        if (!m3u8Text) return null;
+        var audioMatch = m3u8Text.match(/#EXT-X-MEDIA:TYPE=AUDIO[^\n]+/);
+        if (!audioMatch) return null;
+        var uriMatch = audioMatch[0].match(/URI=["']([^"']+)["']/i);
+        if (!uriMatch) return null;
+        var uri = uriMatch[1];
+        if (uri.indexOf('http') !== 0) {
+          try {
+            uri = new URL(uri, masterUrl).href;
+          } catch (e) {
+            var lastSlash = masterUrl.lastIndexOf('/');
+            uri = masterUrl.substring(0, lastSlash + 1) + uri;
           }
-
-          list.sort(function (a, b) {
-            var aNum = parseInt(a.quality.replace(/\D/g, ''), 10) || 0;
-            var bNum = parseInt(b.quality.replace(/\D/g, ''), 10) || 0;
-            return bNum - aNum;
-          });
-
-          return list;
-        } catch (err) {
-          return [];
         }
+        return uri;
       }
 
       // Choose primary audio track (English is guaranteed at index 0)
       var primaryTrack = audioTracks[0];
       var primaryUrl = primaryTrack.url;
 
-      // Expand master playlist into distinct resolution options: Auto, 1080p, 720p, 480p
-      var parsedVariants = await parseM3u8Qualities(primaryUrl);
-      var finalQualities = [];
-      finalQualities.push({ quality: 'Auto', url: primaryUrl });
-
-      if (parsedVariants.length > 0) {
-        for (var vi = 0; vi < parsedVariants.length; vi++) {
-          finalQualities.push(parsedVariants[vi]);
+      // Fetch primary master playlist text
+      var primaryManifestText = '';
+      try {
+        var pmRes = await fetch(primaryUrl, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            Referer: DOMAIN + '/',
+            Origin: DOMAIN,
+          },
+        });
+        if (pmRes.ok) {
+          primaryManifestText = await pmRes.text();
         }
-      } else if (primaryTrack.qualities && primaryTrack.qualities.length > 0) {
-        for (var pq = 0; pq < primaryTrack.qualities.length; pq++) {
-          if (primaryTrack.qualities[pq].quality !== 'Auto') {
-            finalQualities.push(primaryTrack.qualities[pq]);
+      } catch (pmErr) {}
+
+      // Discover video variants from primaryManifestText
+      var parsedVariants = [];
+      if (primaryManifestText) {
+        var pLines = primaryManifestText.split('\n');
+        var seenVar = {};
+        for (var pi = 0; pi < pLines.length; pi++) {
+          var pLine = pLines[pi].trim();
+          if (pLine.indexOf('#EXT-X-STREAM-INF:') === 0) {
+            var resM = pLine.match(/RESOLUTION=(\d+x\d+)/i);
+            var bwM = pLine.match(/BANDWIDTH=(\d+)/i);
+            var nextL = pLines[pi + 1] ? pLines[pi + 1].trim() : '';
+            if (nextL && nextL.indexOf('#') !== 0) {
+              var absVUrl = nextL;
+              try {
+                absVUrl = new URL(nextL, primaryUrl).href;
+              } catch (e) {
+                if (nextL.indexOf('http') !== 0) {
+                  var lastSlash = primaryUrl.lastIndexOf('/');
+                  absVUrl = primaryUrl.substring(0, lastSlash + 1) + nextL;
+                }
+              }
+              var qLab = '1080p';
+              if (resM) {
+                var rParts = resM[1].split('x');
+                qLab = (rParts[1] || rParts[0]) + 'p';
+              } else if (bwM) {
+                var bwVal = parseInt(bwM[1], 10);
+                if (bwVal > 3000000) qLab = '1080p';
+                else if (bwVal > 1500000) qLab = '720p';
+                else if (bwVal > 600000) qLab = '480p';
+                else qLab = '360p';
+              }
+              if (!seenVar[qLab]) {
+                seenVar[qLab] = true;
+                parsedVariants.push({ quality: qLab, url: absVUrl, line: pLine });
+              }
+            }
           }
         }
+        parsedVariants.sort(function (a, b) {
+          var aNum = parseInt(a.quality.replace(/\D/g, ''), 10) || 0;
+          var bNum = parseInt(b.quality.replace(/\D/g, ''), 10) || 0;
+          return bNum - aNum;
+        });
       }
-      primaryTrack.qualities = finalQualities;
+
+      // If we have multiple audio tracks and demuxed audio, fetch audio URIs for all languages
+      // and construct a unified master playlist containing ALL audio dubs (like Money Heist)
+      var synthesizedPlaylist = null;
+      var primaryAudioUri = extractAudioUri(primaryManifestText, primaryUrl);
+
+      if (primaryManifestText && primaryAudioUri && audioTracks.length > 1) {
+        try {
+          var audioUriMap = {};
+          audioUriMap[primaryTrack.language] = primaryAudioUri;
+
+          var fetchPromises = [];
+          for (var ati = 1; ati < audioTracks.length; ati++) {
+            (function (track) {
+              var p = (async function () {
+                try {
+                  var atRes = await fetch(track.url, {
+                    headers: {
+                      'User-Agent': USER_AGENT,
+                      Referer: DOMAIN + '/',
+                      Origin: DOMAIN,
+                    },
+                  });
+                  if (atRes.ok) {
+                    var atTxt = await atRes.text();
+                    var aUri = extractAudioUri(atTxt, track.url);
+                    if (aUri) {
+                      audioUriMap[track.language] = aUri;
+                    }
+                  }
+                } catch (e) {}
+              })();
+              fetchPromises.push(p);
+            })(audioTracks[ati]);
+          }
+
+          await Promise.all(fetchPromises);
+
+          var langCodes = {
+            english: 'en',
+            hindi: 'hi',
+            arabic: 'ar',
+            spanish: 'es',
+            esla: 'es',
+            french: 'fr',
+            kannada: 'kn',
+            malayalam: 'ml',
+            portuguese: 'pt',
+            ptbr: 'pt',
+            tamil: 'ta',
+            telugu: 'te',
+            german: 'de',
+            italian: 'it',
+            russian: 'ru',
+            japanese: 'ja',
+            korean: 'ko',
+            chinese: 'zh',
+          };
+
+          var masterLines = [];
+          masterLines.push('#EXTM3U');
+          masterLines.push('#EXT-X-VERSION:7');
+
+          // Audio track declarations: English first (DEFAULT=YES), other languages DEFAULT=NO
+          for (var li = 0; li < audioTracks.length; li++) {
+            var lName = audioTracks[li].language;
+            var aUrl = audioUriMap[lName];
+            if (!aUrl) continue;
+            var lCode = langCodes[lName.toLowerCase()] || lName.substring(0, 2).toLowerCase();
+            var isDef = li === 0 ? 'YES' : 'NO';
+            var isAuto = li === 0 ? 'YES' : 'NO';
+            masterLines.push(
+              '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="' +
+                lCode +
+                '",NAME="' +
+                lName +
+                '",DEFAULT=' +
+                isDef +
+                ',AUTOSELECT=' +
+                isAuto +
+                ',URI="' +
+                aUrl +
+                '"'
+            );
+          }
+
+          // Video variant declarations
+          for (var pvi = 0; pvi < parsedVariants.length; pvi++) {
+            masterLines.push(parsedVariants[pvi].line);
+            masterLines.push(parsedVariants[pvi].url);
+          }
+
+          synthesizedPlaylist = masterLines.join('\n');
+        } catch (synthErr) {
+          console.warn(TAG + ' ⚠️ Failed to synthesize multi-audio playlist: ' + synthErr.message);
+        }
+      }
+
+      var finalQualities = [];
+      var storedId = null;
+
+      if (synthesizedPlaylist) {
+        try {
+          var storeRes = await fetch(BACKEND_URL + '/api/cinejoy/playlist/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlist: synthesizedPlaylist }),
+          });
+          if (storeRes.ok) {
+            var storeData = await storeRes.json();
+            if (storeData && storeData.id) {
+              storedId = storeData.id;
+            }
+          }
+        } catch (stErr) {
+          console.warn(TAG + ' ⚠️ Backend store failed: ' + stErr.message);
+        }
+      }
+
+      if (storedId) {
+        var baseMasterUrl =
+          BACKEND_URL + '/api/cinejoy/playlist?id=' + encodeURIComponent(storedId) + '&ext=.m3u8';
+        primaryUrl = baseMasterUrl;
+        finalQualities.push({ quality: 'Auto', url: baseMasterUrl });
+        for (var qi = 0; qi < parsedVariants.length; qi++) {
+          finalQualities.push({
+            quality: parsedVariants[qi].quality,
+            url: baseMasterUrl + '&res=' + encodeURIComponent(parsedVariants[qi].quality),
+          });
+        }
+      } else {
+        finalQualities.push({ quality: 'Auto', url: primaryUrl });
+        for (var qi = 0; qi < parsedVariants.length; qi++) {
+          finalQualities.push({
+            quality: parsedVariants[qi].quality,
+            url:
+              BACKEND_URL +
+              '/api/cinejoy/playlist?master=' +
+              encodeURIComponent(primaryUrl) +
+              '&res=' +
+              encodeURIComponent(parsedVariants[qi].quality) +
+              '&ext=.m3u8',
+          });
+        }
+      }
+
+      // Assign qualities with audio preservation to each track
+      for (var atIdx = 0; atIdx < audioTracks.length; atIdx++) {
+        audioTracks[atIdx].qualities = finalQualities;
+      }
+      primaryTrack.url = primaryUrl;
 
       // Fetch full subtitle catalog from /api/subtitles
       var subtitles = [];

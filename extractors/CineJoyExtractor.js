@@ -341,12 +341,96 @@
 
       var BACKEND_URL = 'https://backendmasterstream.onrender.com';
 
-      // Helper to extract audio URI from an m3u8 playlist text
-      function extractAudioUri(m3u8Text, masterUrl) {
+      // Helper to extract audio URI for a specific language from an m3u8 playlist text
+      function extractAudioUri(m3u8Text, masterUrl, targetLang, allowFallback) {
         if (!m3u8Text) return null;
-        var audioMatch = m3u8Text.match(/#EXT-X-MEDIA:TYPE=AUDIO[^\n]+/);
-        if (!audioMatch) return null;
-        var uriMatch = audioMatch[0].match(/URI=["']([^"']+)["']/i);
+        var lines = m3u8Text.split('\n');
+        var audioLines = [];
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].trim().indexOf('#EXT-X-MEDIA:TYPE=AUDIO') === 0) {
+            audioLines.push(lines[i].trim());
+          }
+        }
+        if (audioLines.length === 0) return null;
+
+        var tLow = (targetLang || '').toLowerCase().trim();
+        var bestLine = null;
+
+        // 1. Try to find matching line by NAME or LANGUAGE
+        for (var j = 0; j < audioLines.length; j++) {
+          var al = audioLines[j];
+          var nameMatch = al.match(/NAME=["']?([^"',]+)["']?/i);
+          var langMatch = al.match(/LANGUAGE=["']?([^"',]+)["']?/i);
+          var n = (nameMatch ? nameMatch[1] : '').toLowerCase();
+          var l = (langMatch ? langMatch[1] : '').toLowerCase();
+
+          if (tLow === 'english' || tLow === 'en') {
+            if (n.indexOf('eng') !== -1 || l === 'eng' || l === 'en' || n.indexOf('original') !== -1) {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'french' || tLow === 'fr') {
+            if (
+              n.indexOf('fren') !== -1 ||
+              n.indexOf('fran') !== -1 ||
+              l === 'fra' ||
+              l === 'fre' ||
+              l === 'fr'
+            ) {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'hindi' || tLow === 'hi') {
+            if (n.indexOf('hin') !== -1 || l === 'hin' || l === 'hi') {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'tamil' || tLow === 'ta') {
+            if (n.indexOf('tam') !== -1 || l === 'tam' || l === 'ta') {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'telugu' || tLow === 'te') {
+            if (n.indexOf('tel') !== -1 || l === 'tel' || l === 'te') {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'esla' || tLow === 'spanish' || tLow === 'es') {
+            if (n.indexOf('span') !== -1 || n.indexOf('esla') !== -1 || l === 'spa' || l === 'es') {
+              bestLine = al;
+              break;
+            }
+          } else if (tLow === 'ptbr' || tLow === 'portuguese' || tLow === 'pt') {
+            if (n.indexOf('port') !== -1 || n.indexOf('ptbr') !== -1 || l === 'por' || l === 'pt') {
+              bestLine = al;
+              break;
+            }
+          } else {
+            if (n.indexOf(tLow) !== -1 || l.indexOf(tLow) !== -1) {
+              bestLine = al;
+              break;
+            }
+          }
+        }
+
+        // 2. Fallback to DEFAULT=YES if looking for English
+        if (!bestLine && (tLow === 'english' || tLow === 'en')) {
+          for (var k = 0; k < audioLines.length; k++) {
+            if (/DEFAULT=YES/i.test(audioLines[k])) {
+              bestLine = audioLines[k];
+              break;
+            }
+          }
+        }
+
+        // 3. Fallback to first line ONLY if allowFallback is true (e.g. single audio stream)
+        if (!bestLine && allowFallback) {
+          bestLine = audioLines[0];
+        }
+
+        if (!bestLine) return null;
+
+        var uriMatch = bestLine.match(/URI=["']([^"']+)["']/i);
         if (!uriMatch) return null;
         var uri = uriMatch[1];
         if (uri.indexOf('http') !== 0) {
@@ -428,16 +512,28 @@
       // If we have multiple audio tracks and demuxed audio, fetch audio URIs for all languages
       // and construct a unified master playlist containing ALL audio dubs (like Money Heist)
       var synthesizedPlaylist = null;
-      var primaryAudioUri = extractAudioUri(primaryManifestText, primaryUrl);
+      var primaryAudioUri = extractAudioUri(primaryManifestText, primaryUrl, primaryTrack.language, true);
 
       if (primaryManifestText && primaryAudioUri && audioTracks.length > 1) {
         try {
           var audioUriMap = {};
           audioUriMap[primaryTrack.language] = primaryAudioUri;
 
+          // Check if primary master playlist already has other languages embedded (strict, no fallback)
+          for (var pli = 0; pli < audioTracks.length; pli++) {
+            var plName = audioTracks[pli].language;
+            if (!audioUriMap[plName]) {
+              var pFound = extractAudioUri(primaryManifestText, primaryUrl, plName, false);
+              if (pFound && pFound !== primaryAudioUri) {
+                audioUriMap[plName] = pFound;
+              }
+            }
+          }
+
           var fetchPromises = [];
           for (var ati = 1; ati < audioTracks.length; ati++) {
             (function (track) {
+              if (audioUriMap[track.language]) return;
               var p = (async function () {
                 try {
                   var atRes = await fetch(track.url, {
@@ -449,7 +545,7 @@
                   });
                   if (atRes.ok) {
                     var atTxt = await atRes.text();
-                    var aUri = extractAudioUri(atTxt, track.url);
+                    var aUri = extractAudioUri(atTxt, track.url, track.language, true);
                     if (aUri) {
                       audioUriMap[track.language] = aUri;
                     }
@@ -514,7 +610,13 @@
 
           // Video variant declarations
           for (var pvi = 0; pvi < parsedVariants.length; pvi++) {
-            masterLines.push(parsedVariants[pvi].line);
+            var vLine = parsedVariants[pvi].line;
+            if (vLine.indexOf('AUDIO=') !== -1) {
+              vLine = vLine.replace(/AUDIO=["']?[^"',]+["']?/i, 'AUDIO="audio"');
+            } else {
+              vLine = vLine + ',AUDIO="audio"';
+            }
+            masterLines.push(vLine);
             masterLines.push(parsedVariants[pvi].url);
           }
 

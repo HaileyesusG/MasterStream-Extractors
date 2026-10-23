@@ -322,11 +322,94 @@
         }
       }
 
+      // Helper to discover all resolution variants (1080p, 720p, 480p) from an HLS master playlist
+      async function parseM3u8Qualities(masterUrl) {
+        if (!masterUrl || masterUrl.indexOf('.m3u8') === -1) return [];
+        try {
+          var res = await fetch(masterUrl, {
+            headers: {
+              'User-Agent': USER_AGENT,
+              Referer: DOMAIN + '/',
+              Origin: DOMAIN,
+            },
+          });
+          if (!res.ok) return [];
+          var text = await res.text();
+          var lines = text.split('\n');
+          var list = [];
+          var seen = {};
+
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line.indexOf('#EXT-X-STREAM-INF:') === 0) {
+              var resMatch = line.match(/RESOLUTION=(\d+x\d+)/i);
+              var bwMatch = line.match(/BANDWIDTH=(\d+)/i);
+              var nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+              if (nextLine && nextLine.indexOf('#') !== 0) {
+                var absUrl = nextLine;
+                try {
+                  absUrl = new URL(nextLine, masterUrl).href;
+                } catch (e) {
+                  if (nextLine.indexOf('http') !== 0) {
+                    var lastSlash = masterUrl.lastIndexOf('/');
+                    absUrl = masterUrl.substring(0, lastSlash + 1) + nextLine;
+                  }
+                }
+
+                var qLabel = '1080p';
+                if (resMatch) {
+                  var parts = resMatch[1].split('x');
+                  var h = parts[1] || parts[0];
+                  qLabel = h + 'p';
+                } else if (bwMatch) {
+                  var bw = parseInt(bwMatch[1], 10);
+                  if (bw > 3000000) qLabel = '1080p';
+                  else if (bw > 1500000) qLabel = '720p';
+                  else if (bw > 600000) qLabel = '480p';
+                  else qLabel = '360p';
+                }
+
+                if (!seen[qLabel]) {
+                  seen[qLabel] = true;
+                  list.push({ quality: qLabel, url: absUrl });
+                }
+              }
+            }
+          }
+
+          list.sort(function (a, b) {
+            var aNum = parseInt(a.quality.replace(/\D/g, ''), 10) || 0;
+            var bNum = parseInt(b.quality.replace(/\D/g, ''), 10) || 0;
+            return bNum - aNum;
+          });
+
+          return list;
+        } catch (err) {
+          return [];
+        }
+      }
+
       // Choose primary audio track (English is guaranteed at index 0)
       var primaryTrack = audioTracks[0];
       var primaryUrl = primaryTrack.url;
-      // Qualities array should ONLY contain video resolutions for the primary stream!
-      var primaryQualities = primaryTrack.qualities;
+
+      // Expand master playlist into distinct resolution options: Auto, 1080p, 720p, 480p
+      var parsedVariants = await parseM3u8Qualities(primaryUrl);
+      var finalQualities = [];
+      finalQualities.push({ quality: 'Auto', url: primaryUrl });
+
+      if (parsedVariants.length > 0) {
+        for (var vi = 0; vi < parsedVariants.length; vi++) {
+          finalQualities.push(parsedVariants[vi]);
+        }
+      } else if (primaryTrack.qualities && primaryTrack.qualities.length > 0) {
+        for (var pq = 0; pq < primaryTrack.qualities.length; pq++) {
+          if (primaryTrack.qualities[pq].quality !== 'Auto') {
+            finalQualities.push(primaryTrack.qualities[pq]);
+          }
+        }
+      }
+      primaryTrack.qualities = finalQualities;
 
       // Fetch full subtitle catalog from /api/subtitles
       var subtitles = [];
@@ -394,7 +477,7 @@
           '... (audioTracks: ' +
           audioTracks.length +
           ', qualities: ' +
-          primaryQualities.length +
+          finalQualities.length +
           ', subtitles: ' +
           subtitles.length +
           ')'
@@ -410,7 +493,7 @@
           Origin: DOMAIN,
         },
         subtitles: subtitles,
-        qualities: primaryQualities,
+        qualities: finalQualities,
         audioTracks: audioTracks.length > 1 ? audioTracks : undefined,
       };
     } catch (err) {

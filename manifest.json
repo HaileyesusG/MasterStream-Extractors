@@ -19,7 +19,7 @@
     "providers": {
         "CineJoy": {
             "file": "extractors/CineJoyExtractor.js",
-            "hash": "9D9EEC7F036FD4467B2810C652DAA91D",
+            "hash": "D6E6F4AE0BE2B4E811A805393DDA4DC0",
             "webBaseUrl": "https://vidly.pro/",
             "nativeMode": false,
             "mediaTypes": [

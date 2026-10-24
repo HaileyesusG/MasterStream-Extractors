@@ -674,9 +674,24 @@
         }
       }
 
-      // Assign qualities with audio preservation to each track
+      // Assign language-specific master playlist qualities to each audio track
       for (var atIdx = 0; atIdx < audioTracks.length; atIdx++) {
-        audioTracks[atIdx].qualities = finalQualities;
+        var trackLang = audioTracks[atIdx].language;
+        var trackQualities = [];
+        if (storedId) {
+          var tBaseUrl = baseMasterUrl + '&lang=' + encodeURIComponent(trackLang);
+          audioTracks[atIdx].url = tBaseUrl;
+          trackQualities.push({ quality: 'Auto', url: tBaseUrl });
+          for (var qi = 0; qi < parsedVariants.length; qi++) {
+            trackQualities.push({
+              quality: parsedVariants[qi].quality,
+              url: tBaseUrl + '&res=' + encodeURIComponent(parsedVariants[qi].quality),
+            });
+          }
+        } else {
+          trackQualities = finalQualities;
+        }
+        audioTracks[atIdx].qualities = trackQualities;
       }
       primaryTrack.url = primaryUrl;
 

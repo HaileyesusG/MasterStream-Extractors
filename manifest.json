@@ -1,5 +1,5 @@
 {
-    "version": 320,
+    "version": 321,
     "providerPriority": [
         "LordFlix",
         "CineJoy",
@@ -83,7 +83,7 @@
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": "92B50F702FCBB0AF55ECAB53F65C9714",
+            "hash": "FD89FBD68E734D58A3191CDC18943B5B",
             "mediaTypes": [
                 "movie",
                 "tv"
@@ -91,7 +91,7 @@
         },
         "VidSrc": {
             "file": "extractors/VidSrcExtractor.js",
-            "hash": "C238C99ECC78FEE36EA61ABF8728EB7D",
+            "hash": "34F51EEC021C6ED3DB7CEDB859BF196F",
             "mediaTypes": [
                 "movie",
                 "tv"
@@ -99,7 +99,7 @@
         },
         "OzTv": {
             "file": "extractors/OzTvExtractor.js",
-            "hash": "B847EB69427E4014F7D8B736623F5BE3",
+            "hash": "745AD7F94E7D515A8252EE7BB125F484",
             "mediaTypes": [
                 "movie",
                 "tv"

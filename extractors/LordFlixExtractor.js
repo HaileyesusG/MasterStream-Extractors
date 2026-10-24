@@ -138,28 +138,38 @@
         streamOrigin + '/generate.php',
       ];
 
-      var headers = {
-        'User-Agent': USER_AGENT,
-        'Referer': referer,
-        'Origin': origin || new URL(referer).origin,
-      };
+      var headerCandidates = [
+        {
+          'User-Agent': USER_AGENT,
+          'Referer': VIDSRC_BASE + '/',
+          'Origin': VIDSRC_BASE,
+        },
+        {
+          'User-Agent': USER_AGENT,
+          'Referer': referer || VIDSRC_BASE + '/',
+          'Origin': origin || (referer ? new URL(referer).origin : VIDSRC_BASE),
+        },
+      ];
 
       for (var i = 0; i < candidateUrls.length; i++) {
         var tokenUrl = candidateUrls[i];
-        try {
-          var res = await fetch(tokenUrl, { headers: headers });
-          if (res && res.ok) {
-            var text = (await res.text()).trim();
-            if (text && text.indexOf('eyJ') === 0) {
-              tokenCache[streamOrigin] = {
-                token: text,
-                exp: now + 3.5 * 3600,
-              };
-              return text;
+        for (var h = 0; h < headerCandidates.length; h++) {
+          var headers = headerCandidates[h];
+          try {
+            var res = await fetch(tokenUrl, { headers: headers });
+            if (res && res.ok) {
+              var text = (await res.text()).trim();
+              if (text && text.indexOf('eyJ') === 0) {
+                tokenCache[streamOrigin] = {
+                  token: text,
+                  exp: now + 3.5 * 3600,
+                };
+                return text;
+              }
             }
+          } catch (fetchErr) {
+            console.warn(TAG + ' ⚠️ Failed token fetch from ' + tokenUrl + ': ' + (fetchErr.message || fetchErr));
           }
-        } catch (fetchErr) {
-          console.warn(TAG + ' ⚠️ Failed token fetch from ' + tokenUrl + ': ' + (fetchErr.message || fetchErr));
         }
 
         // Also try native XMLHttpRequest (bypasses FetchBridge, uses Chromium's own cert store)

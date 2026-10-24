@@ -288,7 +288,13 @@
         }
 
         // Special case: Lupin (TMDB 96677) Season 3+ has English audio mistakenly labeled as 'French' on Vidly
-        var isLupinS3Plus = (id == 96677 || tmdbId == 96677 || (title && title.toLowerCase().indexOf('lupin') !== -1)) && isTvShow && Number(season) >= 3;
+        var isLupinS3Plus = (
+          String(id) === '96677' ||
+          String(tmdbId) === '96677' ||
+          (typeof imdbId === 'string' && imdbId === 'tt2531336') ||
+          (typeof id === 'string' && id === 'tt2531336') ||
+          (title && /lupin/i.test(title))
+        ) && isTvShow && Number(season) >= 3;
         if (isLupinS3Plus && (langName.toLowerCase() === 'french' || langName.toLowerCase() === 'français' || langName.toLowerCase() === 'francais')) {
           console.log(TAG + ' 🔄 Lupin S' + season + ': mapping French track to English');
           langName = 'English';

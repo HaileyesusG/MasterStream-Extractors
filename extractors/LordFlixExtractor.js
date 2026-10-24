@@ -528,6 +528,21 @@
       return null;
     }
 
+    // Special case: Lupin (TMDB 96677 / tt2531336) Season 3+ has French audio on vidsrc,
+    // while CineJoy (Vidly) has English audio. Defer to CineJoy so users get English audio.
+    var isLupinS3Plus = (
+      String(tmdbId) === '96677' ||
+      String(id) === '96677' ||
+      (typeof imdbId === 'string' && imdbId === 'tt2531336') ||
+      (typeof id === 'string' && id === 'tt2531336') ||
+      (title && /lupin/i.test(title))
+    ) && isTvShow && Number(season) >= 3;
+
+    if (isLupinS3Plus) {
+      console.log(TAG + ' ⏭️ Skipping Lupin S' + season + ' on LordFlix (French audio on vidsrc) — deferring to CineJoy for English audio');
+      return null;
+    }
+
     // 1. Direct WebAssembly extraction (V8 / Node.js / Android TV / Web)
     if (typeof WebAssembly !== 'undefined') {
       try {

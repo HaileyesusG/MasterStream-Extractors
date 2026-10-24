@@ -1,5 +1,5 @@
 {
-    "version": 319,
+    "version": 320,
     "providerPriority": [
         "LordFlix",
         "CineJoy",
@@ -19,7 +19,7 @@
     "providers": {
         "CineJoy": {
             "file": "extractors/CineJoyExtractor.js",
-            "hash": "981CE168D98D9FD09AB63E7C3761BFF8",
+            "hash": "E7AE39A5E2ACEA240A9D00C219203416",
             "webBaseUrl": "https://vidly.pro/",
             "nativeMode": false,
             "mediaTypes": [
@@ -83,7 +83,7 @@
         },
         "LordFlix": {
             "file": "extractors/LordFlixExtractor.js",
-            "hash": "7E3F3337C5050AB4F00844A35117EE57",
+            "hash": "92B50F702FCBB0AF55ECAB53F65C9714",
             "mediaTypes": [
                 "movie",
                 "tv"

@@ -66,6 +66,29 @@
     }
 
     try {
+      // Money Heist & Lupin legacy normalizer
+      if (isTv) {
+        var sNum = Number(season) || 1;
+        var eNum = Number(episode) || 1;
+        if (String(tmdbId) === '71446' || (typeof arg1 === 'string' && arg1 === 'tt6468322')) {
+          if (sNum === 2 && eNum > 8) {
+            season = 4; episode = eNum - 8;
+            console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+          } else if (sNum === 2 && (eNum === 7 || eNum === 8)) {
+            season = 3; episode = eNum;
+            console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+          } else if (sNum === 1 && eNum > 9) {
+            season = 2; episode = eNum - 9;
+            console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+          }
+        } else if (String(tmdbId) === '96677' || (typeof arg1 === 'string' && arg1 === 'tt2531336')) {
+          if (sNum === 1 && eNum > 5) {
+            season = 2; episode = eNum - 5;
+            console.log(TAG + ' 🔄 Lupin legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+          }
+        }
+      }
+
       var baseHeaders = {
         'User-Agent': USER_AGENT,
         'Referer': DOMAIN + '/',

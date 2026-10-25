@@ -154,6 +154,29 @@
       return null;
     }
 
+    // Money Heist & Lupin legacy normalizer
+    if (isTvShow) {
+      var sNum = Number(season) || 1;
+      var eNum = Number(episode) || 1;
+      if (String(tmdbId) === '71446' || String(id) === '71446' || (typeof imdbId === 'string' && imdbId === 'tt6468322') || (title && /money\s*heist|casa\s*de\s*papel/i.test(title))) {
+        if (sNum === 2 && eNum > 8) {
+          season = 4; episode = eNum - 8;
+          console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+        } else if (sNum === 2 && (eNum === 7 || eNum === 8)) {
+          season = 3; episode = eNum;
+          console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+        } else if (sNum === 1 && eNum > 9) {
+          season = 2; episode = eNum - 9;
+          console.log(TAG + ' 🔄 Money Heist legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+        }
+      } else if (String(tmdbId) === '96677' || String(id) === '96677' || (typeof imdbId === 'string' && imdbId === 'tt2531336') || (title && /lupin/i.test(title))) {
+        if (sNum === 1 && eNum > 5) {
+          season = 2; episode = eNum - 5;
+          console.log(TAG + ' 🔄 Lupin legacy S' + sNum + 'E' + eNum + ' -> S' + season + 'E' + episode);
+        }
+      }
+    }
+
     var pageUrl = isTvShow
       ? DOMAIN + '/tv/' + id + '/' + (season || 1) + '/' + (episode || 1)
       : DOMAIN + '/movie/' + id;

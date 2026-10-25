@@ -34,8 +34,8 @@
 
   var HEADERS = {
     Accept: '*/*',
-    Origin: 'https://player.videasy.to',
-    Referer: 'https://player.videasy.to/',
+    Origin: 'https://vidy.st',
+    Referer: 'https://vidy.st/',
     'User-Agent': USER_AGENT,
   };
 
@@ -187,7 +187,7 @@
         'Content-Type': 'application/json',
         Accept: 'application/json, text/plain, */*',
         'User-Agent': USER_AGENT,
-        Referer: 'https://player.videasy.to/',
+        Referer: 'https://vidy.st/',
       };
 
       for (var i = 0; i < servers.length; i++) {
@@ -318,8 +318,8 @@
           provider: 'Videasy',
           headers: {
             'User-Agent': USER_AGENT,
-            Referer: 'https://player.videasy.to/',
-            Origin: 'https://player.videasy.to',
+            Referer: 'https://vidy.st/',
+            Origin: 'https://vidy.st',
           },
           subtitles: subtitlesList,
         };

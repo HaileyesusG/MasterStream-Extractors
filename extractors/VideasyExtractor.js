@@ -142,6 +142,18 @@
       title = meta.title;
       year = meta.year;
 
+      // Special case: Lupin (TMDB 96677 / tt2531336) Season 3+ has French audio / broken streams on Videasy
+      var isLupinS3Plus = (
+        String(tmdbId) === '96677' ||
+        (typeof imdbId === 'string' && imdbId === 'tt2531336') ||
+        (title && /lupin/i.test(title))
+      ) && isTv && Number(season) >= 3;
+
+      if (isLupinS3Plus) {
+        console.log(TAG + ' ⏭️ Skipping Lupin S' + season + ' on Videasy — deferring to CineJoy for English audio');
+        return null;
+      }
+
       // Step 1: Fetch seed (required for enc=2 API)
       console.log(TAG + ' 🌱 Fetching seed for tmdbId=' + tmdbId);
       var seedRaw = await fetchGet(DOMAIN + '/seed?mediaId=' + tmdbId, HEADERS);

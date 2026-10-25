@@ -549,7 +549,29 @@
     ) && isTvShow && Number(season) >= 3;
 
     if (isLupinS3Plus) {
-      console.log(TAG + ' ⏭️ Skipping Lupin S' + season + ' on LordFlix (French audio on vidsrc) — deferring to CineJoy for English audio');
+      console.log(TAG + ' 🔄 Lupin S' + season + ': delegating to CineJoy for English audio...');
+      var cjExt = null;
+      for (var w = 0; w < 30; w++) {
+        cjExt = (typeof globalThis !== 'undefined' && globalThis.CineJoyExtractor)
+          ? globalThis.CineJoyExtractor
+          : (typeof window !== 'undefined' && window.CineJoyExtractor)
+          ? window.CineJoyExtractor
+          : null;
+        if (cjExt && typeof cjExt.extract === 'function') break;
+        await new Promise(function (r) { setTimeout(r, 100); });
+      }
+
+      if (cjExt && typeof cjExt.extract === 'function') {
+        try {
+          var cjRes = await cjExt.extract(tmdbId, imdbId, title || 'Lupin', isTvShow, season, episode, year);
+          if (cjRes && cjRes.url) {
+            console.log(TAG + ' ✅ Lupin S' + season + ': successfully extracted English stream via CineJoy');
+            return Object.assign({}, cjRes, { provider: 'LordFlix' });
+          }
+        } catch (e) {
+          console.warn(TAG + ' ⚠️ CineJoy delegation failed: ' + (e.message || e));
+        }
+      }
       return null;
     }
 

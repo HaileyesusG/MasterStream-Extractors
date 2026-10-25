@@ -134,8 +134,8 @@
       //    Plain HTTP connects without TLS handshake, completely avoiding SSL failure.
       // 2. HTTPS as fallback (works in browsers / Node / modern mobile).
       var candidateUrls = [
-        streamOrigin.replace(/^https:/i, 'http:') + '/generate.php',
         streamOrigin + '/generate.php',
+        streamOrigin.replace(/^https:/i, 'http:') + '/generate.php',
       ];
 
       var headerCandidates = [
@@ -179,7 +179,7 @@
               if (typeof XMLHttpRequest === 'undefined') return resolve('');
               var xhr = new XMLHttpRequest();
               xhr.open('GET', tokenUrl, true);
-              xhr.timeout = 5000;
+              xhr.timeout = 2000;
               xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 300) {
                   resolve((xhr.responseText || '').trim());
@@ -433,8 +433,11 @@
   async function parseMasterQualities(masterUrl, headers) {
     var qualities = [{ quality: 'Auto', url: masterUrl }];
     try {
-      var res = await fetch(masterUrl, { headers: headers });
-      if (!res.ok) return qualities;
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 1500) : null;
+      var res = await fetch(masterUrl, { headers: headers, signal: controller ? controller.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (!res || !res.ok) return qualities;
       var text = await res.text();
       var lines = text.split('\n');
       for (var i = 0; i < lines.length; i++) {
@@ -476,10 +479,14 @@
       if (isTvShow && season) query += '&season=' + encodeURIComponent(String(season));
       if (isTvShow && episode) query += '&episode=' + encodeURIComponent(String(episode));
 
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 3500) : null;
       var res = await fetch(BACKEND_URL + '?' + query, {
         headers: { Accept: 'application/json' },
+        signal: controller ? controller.signal : undefined,
       });
-      if (!res.ok) return null;
+      if (timer) clearTimeout(timer);
+      if (!res || !res.ok) return null;
       var data = await res.json();
       if (!data || !data.url) return null;
 
@@ -575,9 +582,22 @@
       return null;
     }
 
-    // 1. Direct WebAssembly extraction (V8 / Node.js / Android TV / Web)
+    // 1. FAST PATH: Backend extraction (super fast Node VM / Gigabit / cached in ~1s)
+    try {
+      console.log(TAG + ' ⚡ Attempting fast backend extraction...');
+      var fastResult = await extractViaBackend(tmdbId, imdbId, isTvShow, season, episode);
+      if (fastResult && fastResult.url) {
+        console.log(TAG + ' 🚀 Fast backend extraction succeeded in ~1s');
+        return fastResult;
+      }
+    } catch (fastErr) {
+      console.warn(TAG + ' ⚠️ Fast backend extraction failed: ' + (fastErr.message || fastErr));
+    }
+
+    // 2. FALLBACK: Direct WebAssembly extraction (V8 / Node.js / Android TV / Web)
     if (typeof WebAssembly !== 'undefined') {
       try {
+        console.log(TAG + ' 🔄 Falling back to client-side direct WASM extraction...');
         var directResult = await extractDirect(id, isTvShow, season, episode);
         if (directResult) return directResult;
       } catch (directErr) {
@@ -585,12 +605,7 @@
       }
     }
 
-    // 2. Fallback: Backend Proxy
-    try {
-      return await extractViaBackend(tmdbId, imdbId, isTvShow, season, episode);
-    } catch (err) {
-      return null;
-    }
+    return null;
   }
 
   var extractor = { extract: extract };

@@ -40,6 +40,38 @@
     },
   };
 
+  var dynamicCatalogCache = null;
+  var dynamicCatalogExpiry = 0;
+
+  async function getAmharicCatalog() {
+    var now = Date.now();
+    if (dynamicCatalogCache && now < dynamicCatalogExpiry) {
+      return dynamicCatalogCache;
+    }
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
+      var res = await fetch('https://backendmasterstream.onrender.com/api/amharic/catalog', {
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      if (res && res.ok) {
+        var data = await res.json();
+        if (data && (data.tv || data.movies)) {
+          var mergedTv = Object.assign({}, AMHARIC_CATALOG.tv, data.tv || {});
+          var mergedMovies = Object.assign({}, AMHARIC_CATALOG.movies, data.movies || {});
+          dynamicCatalogCache = { tv: mergedTv, movies: mergedMovies };
+          dynamicCatalogExpiry = now + (5 * 60 * 1000);
+          return dynamicCatalogCache;
+        }
+      }
+    } catch (fetchErr) {
+      // Fall back quietly
+    }
+    return AMHARIC_CATALOG;
+  }
+
+
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var imdbId, title, isTv, season, episode, year;
 
@@ -57,18 +89,16 @@
 
     var item = null;
 
+    var catalog = await getAmharicCatalog();
     if (isTvShow) {
-      // 1. Direct match by TMDB ID
       var tvKey = String(tmdbId) + '_' + s + '_' + e;
-      item = AMHARIC_CATALOG.tv[tvKey];
+      item = (catalog.tv && catalog.tv[tvKey]) || AMHARIC_CATALOG.tv[tvKey];
 
-      // 2. Fallback match by Title (e.g. Carrie / Homeland S1E8)
       if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
-        item = AMHARIC_CATALOG.tv['288673_1_8'];
+        item = (catalog.tv && catalog.tv['288673_1_8']) || AMHARIC_CATALOG.tv['288673_1_8'];
       }
     } else {
-      // Match movie by TMDB ID
-      item = AMHARIC_CATALOG.movies[String(tmdbId)];
+      item = (catalog.movies && catalog.movies[String(tmdbId)]) || AMHARIC_CATALOG.movies[String(tmdbId)];
     }
 
     if (!item) {

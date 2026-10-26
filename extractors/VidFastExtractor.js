@@ -34,20 +34,53 @@
     movies: {},
   };
 
+  
+  var dynamicCatalogCache = null;
+  var dynamicCatalogExpiry = 0;
+
+  async function getAmharicCatalog() {
+    var now = Date.now();
+    if (dynamicCatalogCache && now < dynamicCatalogExpiry) {
+      return dynamicCatalogCache;
+    }
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
+      var res = await fetch('https://backendmasterstream.onrender.com/api/amharic/catalog', {
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      if (res && res.ok) {
+        var data = await res.json();
+        if (data && (data.tv || data.movies)) {
+          var mergedTv = Object.assign({}, AMHARIC_CATALOG.tv, data.tv || {});
+          var mergedMovies = Object.assign({}, AMHARIC_CATALOG.movies, data.movies || {});
+          dynamicCatalogCache = { tv: mergedTv, movies: mergedMovies };
+          dynamicCatalogExpiry = now + (5 * 60 * 1000);
+          return dynamicCatalogCache;
+        }
+      }
+    } catch (fetchErr) {
+      // Fall back quietly
+    }
+    return AMHARIC_CATALOG;
+  }
+
   async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
     if (!result || !result.url) return result;
     try {
+      var catalog = await getAmharicCatalog();
       var s = Number(season || 1);
       var e = Number(episode || 1);
       var item = null;
       if (isTvShow) {
         var tvKey = String(tmdbId) + '_' + s + '_' + e;
-        item = AMHARIC_CATALOG.tv[tvKey];
+        item = (catalog.tv && catalog.tv[tvKey]) || AMHARIC_CATALOG.tv[tvKey];
         if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
-          item = AMHARIC_CATALOG.tv['288673_1_8'];
+          item = (catalog.tv && catalog.tv['288673_1_8']) || AMHARIC_CATALOG.tv['288673_1_8'];
         }
       } else {
-        item = AMHARIC_CATALOG.movies[String(tmdbId)];
+        item = (catalog.movies && catalog.movies[String(tmdbId)]) || AMHARIC_CATALOG.movies[String(tmdbId)];
       }
 
       if (!item) return result;

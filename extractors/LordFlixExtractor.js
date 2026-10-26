@@ -559,32 +559,10 @@
 
       if (!item) return result;
 
-      var now = Math.floor(Date.now() / 1000);
-      var amharicUrl = item.fallbackUrl;
-      var cached = amharicTokenCache[item.uniqueId];
-
-      if (cached && cached.url && cached.exp > now + 300) {
-        amharicUrl = cached.url;
-      } else if (item.uniqueId) {
-        try {
-          var resp = await fetch(
-            'https://stream.unlockify.ink/backend/api/video/' + encodeURIComponent(item.uniqueId) + '/player-stream-link',
-            { method: 'POST' }
-          );
-          if (resp && resp.ok) {
-            var j = await resp.json();
-            if (j && j.stream_url) {
-              amharicUrl = j.stream_url;
-              amharicTokenCache[item.uniqueId] = {
-                url: j.stream_url,
-                exp: j.expires_at || (now + 7200),
-              };
-            }
-          }
-        } catch (linkErr) {
-          console.warn(TAG + ' ⚠️ Failed to fetch player-stream-link: ' + (linkErr.message || linkErr));
-        }
-      }
+      // Use backend 302 redirect ending in .mp4 so ExoPlayer initializes ProgressiveMediaSource / Mp4Extractor
+      var amharicUrl = item.uniqueId
+        ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
+        : (item.fallbackUrl || item.streamUrl);
 
       var englishQualities = (result.qualities && result.qualities.length > 0)
         ? result.qualities
@@ -607,7 +585,7 @@
           qualities: amharicQualities,
         },
       ];
-      console.log(TAG + ' 🇪🇹 Attached Amharic audio track to result');
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
     } catch (attachErr) {
       console.warn(TAG + ' ⚠️ attachAmharicAudioTrack error: ' + (attachErr.message || attachErr));
     }

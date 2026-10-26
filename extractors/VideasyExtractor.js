@@ -133,21 +133,9 @@
 
       if (!item) return result;
 
-      var amharicUrl = item.fallbackUrl;
-      if (item.uniqueId) {
-        try {
-          var resp = await fetch(
-            'https://stream.unlockify.ink/backend/api/video/' + encodeURIComponent(item.uniqueId) + '/player-stream-link',
-            { method: 'POST' }
-          );
-          if (resp && resp.ok) {
-            var j = await resp.json();
-            if (j && j.stream_url) {
-              amharicUrl = j.stream_url;
-            }
-          }
-        } catch (linkErr) {}
-      }
+      var amharicUrl = item.uniqueId
+        ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
+        : (item.fallbackUrl || item.streamUrl);
 
       var englishQualities = (result.qualities && result.qualities.length > 0)
         ? result.qualities
@@ -170,7 +158,7 @@
           qualities: amharicQualities,
         },
       ];
-      console.log(TAG + ' 🇪🇹 Attached Amharic audio track to result');
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
     } catch (attachErr) {}
     return result;
   }

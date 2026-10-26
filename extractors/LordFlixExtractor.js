@@ -522,6 +522,98 @@
     }
   }
 
+    // Catalog of Amharic dubbed movies and TV series
+  var AMHARIC_CATALOG = {
+    tv: {
+      '288673_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+      '1407_1_8': {
+        title: 'Carrie (Homeland) S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+    },
+    movies: {},
+  };
+
+  var amharicTokenCache = {};
+
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
+    try {
+      var s = Number(season || 1);
+      var e = Number(episode || 1);
+      var item = null;
+      if (isTvShow) {
+        var tvKey = String(tmdbId) + '_' + s + '_' + e;
+        item = AMHARIC_CATALOG.tv[tvKey];
+        if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
+          item = AMHARIC_CATALOG.tv['288673_1_8'];
+        }
+      } else {
+        item = AMHARIC_CATALOG.movies[String(tmdbId)];
+      }
+
+      if (!item) return result;
+
+      var now = Math.floor(Date.now() / 1000);
+      var amharicUrl = item.fallbackUrl;
+      var cached = amharicTokenCache[item.uniqueId];
+
+      if (cached && cached.url && cached.exp > now + 300) {
+        amharicUrl = cached.url;
+      } else if (item.uniqueId) {
+        try {
+          var resp = await fetch(
+            'https://stream.unlockify.ink/backend/api/video/' + encodeURIComponent(item.uniqueId) + '/player-stream-link',
+            { method: 'POST' }
+          );
+          if (resp && resp.ok) {
+            var j = await resp.json();
+            if (j && j.stream_url) {
+              amharicUrl = j.stream_url;
+              amharicTokenCache[item.uniqueId] = {
+                url: j.stream_url,
+                exp: j.expires_at || (now + 7200),
+              };
+            }
+          }
+        } catch (linkErr) {
+          console.warn(TAG + ' ⚠️ Failed to fetch player-stream-link: ' + (linkErr.message || linkErr));
+        }
+      }
+
+      var englishQualities = (result.qualities && result.qualities.length > 0)
+        ? result.qualities
+        : [{ quality: result.quality || 'Auto', url: result.url }];
+
+      var amharicQualities = [
+        { quality: '1080p', url: amharicUrl },
+        { quality: 'Auto', url: amharicUrl },
+      ];
+
+      result.audioTracks = [
+        {
+          language: 'English',
+          url: result.url,
+          qualities: englishQualities,
+        },
+        {
+          language: 'Amharic (\u1260\u1275\u122d\u1309\u121d)',
+          url: amharicUrl,
+          qualities: amharicQualities,
+        },
+      ];
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track to result');
+    } catch (attachErr) {
+      console.warn(TAG + ' ⚠️ attachAmharicAudioTrack error: ' + (attachErr.message || attachErr));
+    }
+    return result;
+  }
+
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     // Calling convention detection:
     //   4-param: (tmdbId, isTv, season, episode)
@@ -573,7 +665,8 @@
           var cjRes = await cjExt.extract(tmdbId, imdbId, title || 'Lupin', isTvShow, season, episode, year);
           if (cjRes && cjRes.url) {
             console.log(TAG + ' ✅ Lupin S' + season + ': successfully extracted English stream via CineJoy');
-            return Object.assign({}, cjRes, { provider: 'LordFlix' });
+            var res = Object.assign({}, cjRes, { provider: 'LordFlix' });
+            return await attachAmharicAudioTrack(res, tmdbId, isTvShow, season, episode, title);
           }
         } catch (e) {
           console.warn(TAG + ' ⚠️ CineJoy delegation failed: ' + (e.message || e));
@@ -588,7 +681,7 @@
       var fastResult = await extractViaBackend(tmdbId, imdbId, isTvShow, season, episode);
       if (fastResult && fastResult.url) {
         console.log(TAG + ' 🚀 Fast backend extraction succeeded in ~1s');
-        return fastResult;
+        return await attachAmharicAudioTrack(fastResult, tmdbId, isTvShow, season, episode, title);
       }
     } catch (fastErr) {
       console.warn(TAG + ' ⚠️ Fast backend extraction failed: ' + (fastErr.message || fastErr));
@@ -599,7 +692,9 @@
       try {
         console.log(TAG + ' 🔄 Falling back to client-side direct WASM extraction...');
         var directResult = await extractDirect(id, isTvShow, season, episode);
-        if (directResult) return directResult;
+        if (directResult) {
+          return await attachAmharicAudioTrack(directResult, tmdbId, isTvShow, season, episode, title);
+        }
       } catch (directErr) {
         console.warn(TAG + ' ⚠️ Direct extraction failed: ' + (directErr.message || directErr));
       }

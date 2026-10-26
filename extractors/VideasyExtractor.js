@@ -98,6 +98,83 @@
     return { title: title || '', year: year || '' };
   }
 
+  // Catalog of Amharic dubbed movies and TV series
+  var AMHARIC_CATALOG = {
+    tv: {
+      '288673_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+      '1407_1_8': {
+        title: 'Carrie (Homeland) S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+    },
+    movies: {},
+  };
+
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
+    try {
+      var s = Number(season || 1);
+      var e = Number(episode || 1);
+      var item = null;
+      if (isTvShow) {
+        var tvKey = String(tmdbId) + '_' + s + '_' + e;
+        item = AMHARIC_CATALOG.tv[tvKey];
+        if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
+          item = AMHARIC_CATALOG.tv['288673_1_8'];
+        }
+      } else {
+        item = AMHARIC_CATALOG.movies[String(tmdbId)];
+      }
+
+      if (!item) return result;
+
+      var amharicUrl = item.fallbackUrl;
+      if (item.uniqueId) {
+        try {
+          var resp = await fetch(
+            'https://stream.unlockify.ink/backend/api/video/' + encodeURIComponent(item.uniqueId) + '/player-stream-link',
+            { method: 'POST' }
+          );
+          if (resp && resp.ok) {
+            var j = await resp.json();
+            if (j && j.stream_url) {
+              amharicUrl = j.stream_url;
+            }
+          }
+        } catch (linkErr) {}
+      }
+
+      var englishQualities = (result.qualities && result.qualities.length > 0)
+        ? result.qualities
+        : [{ quality: result.quality || 'Auto', url: result.url }];
+
+      var amharicQualities = [
+        { quality: '1080p', url: amharicUrl },
+        { quality: 'Auto', url: amharicUrl },
+      ];
+
+      result.audioTracks = [
+        {
+          language: 'English',
+          url: result.url,
+          qualities: englishQualities,
+        },
+        {
+          language: 'Amharic (\u1260\u1275\u122d\u1309\u121d)',
+          url: amharicUrl,
+          qualities: amharicQualities,
+        },
+      ];
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track to result');
+    } catch (attachErr) {}
+    return result;
+  }
+
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var isTv, season, episode, title, imdbId, year;
 

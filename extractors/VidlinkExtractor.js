@@ -19,6 +19,7 @@
         title: 'Carrie',
         season: 1,
         episode: 8,
+        uniqueId: 'AgADcR4AAnAzSFI',
         streamUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
         referer: 'https://stream.unlockify.ink/video/AgADcR4AAnAzSFI',
         quality: '1080p',
@@ -28,6 +29,7 @@
         title: 'Carrie (Homeland)',
         season: 1,
         episode: 8,
+        uniqueId: 'AgADcR4AAnAzSFI',
         streamUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
         referer: 'https://stream.unlockify.ink/video/AgADcR4AAnAzSFI',
         quality: '1080p',
@@ -77,6 +79,20 @@
     console.log(TAG + ' 🇪🇹 Found Amharic translation for: ' + (item.title || title || tmdbId) + (isTvShow ? ' S' + s + 'E' + e : ''));
 
     var streamUrl = item.streamUrl;
+    if (item.uniqueId) {
+      try {
+        var resp = await fetch(
+          'https://stream.unlockify.ink/backend/api/video/' + encodeURIComponent(item.uniqueId) + '/player-stream-link',
+          { method: 'POST' }
+        );
+        if (resp && resp.ok) {
+          var j = await resp.json();
+          if (j && j.stream_url) {
+            streamUrl = j.stream_url;
+          }
+        }
+      } catch (err) {}
+    }
     var referer = item.referer || 'https://stream.unlockify.ink/';
     var quality = item.quality || '1080p';
 

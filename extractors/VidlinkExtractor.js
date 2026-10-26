@@ -14,6 +14,15 @@
   var AMHARIC_CATALOG = {
     tv: {
       // Format: "{tmdbId}_{season}_{episode}"
+      // Carrie (TMDB 288673) Season 1 Episode 8
+      '288673_1_8': {
+        title: 'Carrie',
+        season: 1,
+        episode: 8,
+        streamUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+        referer: 'https://stream.unlockify.ink/video/AgADcR4AAnAzSFI',
+        quality: '1080p',
+      },
       // Homeland / Carrie (TMDB 1407) Season 1 Episode 8
       '1407_1_8': {
         title: 'Carrie (Homeland)',
@@ -47,13 +56,13 @@
     var item = null;
 
     if (isTvShow) {
-      // 1. Match by TMDB ID
+      // 1. Direct match by TMDB ID
       var tvKey = String(tmdbId) + '_' + s + '_' + e;
       item = AMHARIC_CATALOG.tv[tvKey];
 
       // 2. Fallback match by Title (e.g. Carrie / Homeland S1E8)
       if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
-        item = AMHARIC_CATALOG.tv['1407_1_8'];
+        item = AMHARIC_CATALOG.tv['288673_1_8'];
       }
     } else {
       // Match movie by TMDB ID
@@ -65,7 +74,7 @@
       return null;
     }
 
-    console.log(TAG + ' 🇪🇹 Found Amharic translation for: ' + (item.title || title) + (isTvShow ? ' S' + s + 'E' + e : ''));
+    console.log(TAG + ' 🇪🇹 Found Amharic translation for: ' + (item.title || title || tmdbId) + (isTvShow ? ' S' + s + 'E' + e : ''));
 
     var streamUrl = item.streamUrl;
     var referer = item.referer || 'https://stream.unlockify.ink/';

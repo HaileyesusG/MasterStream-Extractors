@@ -1,5 +1,5 @@
 {
-    "version":  328,
+    "version":  329,
     "providerPriority":  [
                              "Vidlink",
                              "LordFlix",
@@ -58,7 +58,7 @@
                                   },
                       "Vidlink":  {
                                       "file":  "extractors/VidlinkExtractor.js",
-                                      "hash":  "B611EB46D6CB2792D558300C14A99ABC",
+                                      "hash":  "84B1CBF3F22FF4E9B16EBB60232A29CC",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",

@@ -1,6 +1,7 @@
 {
-    "version":  326,
+    "version":  328,
     "providerPriority":  [
+                             "Vidlink",
                              "LordFlix",
                              "CineJoy",
                              "VidFast",
@@ -13,8 +14,7 @@
                              "MyFlixerz",
                              "VidlinkSniffer",
                              "VidApi",
-                             "VidSrcCC",
-                             "Vidlink"
+                             "VidSrcCC"
                          ],
     "providers":  {
                       "CineJoy":  {
@@ -58,7 +58,7 @@
                                   },
                       "Vidlink":  {
                                       "file":  "extractors/VidlinkExtractor.js",
-                                      "hash":  "E4CFD5D5C3AA893562C013063CCF7AA6",
+                                      "hash":  "B611EB46D6CB2792D558300C14A99ABC",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",

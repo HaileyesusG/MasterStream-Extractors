@@ -16,17 +16,89 @@
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
-  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
+  
+  // Catalog of Amharic dubbed movies and TV series
+  var AMHARIC_CATALOG = {
+    tv: {
+      '288673_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+      '1407_1_8': {
+        title: 'Carrie (Homeland) S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+    },
+    movies: {},
+  };
+
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
+    try {
+      var s = Number(season || 1);
+      var e = Number(episode || 1);
+      var item = null;
+      if (isTvShow) {
+        var tvKey = String(tmdbId) + '_' + s + '_' + e;
+        item = AMHARIC_CATALOG.tv[tvKey];
+        if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
+          item = AMHARIC_CATALOG.tv['288673_1_8'];
+        }
+      } else {
+        item = AMHARIC_CATALOG.movies[String(tmdbId)];
+      }
+
+      if (!item) return result;
+
+      var amharicUrl = item.uniqueId
+        ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
+        : (item.fallbackUrl || item.streamUrl);
+
+      var englishQualities = (result.qualities && result.qualities.length > 0)
+        ? result.qualities
+        : [{ quality: result.quality || 'Auto', url: result.url }];
+
+      var amharicQualities = [
+        { quality: '1080p', url: amharicUrl },
+        { quality: 'Auto', url: amharicUrl },
+      ];
+
+      var amharicLabel = 'Amharic (\u1260\u1275\u122d\u1309\u121d)';
+
+      var existingAudio = result.audioTracks || [
+        {
+          language: 'English',
+          url: result.url,
+          qualities: englishQualities,
+        },
+      ];
+
+      if (!existingAudio.some(function (a) { return a.language === amharicLabel; })) {
+        existingAudio.push({
+          language: amharicLabel,
+          url: amharicUrl,
+          qualities: amharicQualities,
+        });
+      }
+      result.audioTracks = existingAudio;
+
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
+    } catch (attachErr) {}
+    return result;
+  }
+
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     // Dual calling-convention support:
     //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
     //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
-    var isTv, season, episode, imdbId;
+    var isTv, season, episode, imdbId, title;
     if (typeof arg1 === 'boolean') {
       isTv = arg1; season = arg2; episode = arg3; // mobile
     } else {
-      imdbId = arg1; isTv = arg3; season = arg4; episode = arg5; // TV app
-    }
-    try {
+      imdbId = arg1; title = arg2; isTv = arg3; season = arg4; episode = arg5; // TV app
+    } try {
       if (isTv && !SUPPORTS_TV)    { console.log(TAG + ' Skip TV'); return null; }
       if (!isTv && !SUPPORTS_MOVIE) { console.log(TAG + ' Skip Movie'); return null; }
 
@@ -265,7 +337,7 @@
             console.log(TAG + ' 🎯 Generated ' + qualities.length + ' qualities (1080p, 720p, 480p, 360p)');
           }
 
-          return {
+          var vidFastResult = {
             url: finalStreamUrl,
             quality: 'Auto',
             provider: 'VidFast-' + server.name,
@@ -273,6 +345,7 @@
             subtitles: subtitles,
             qualities: qualities,
           };
+          return await attachAmharicAudioTrack(vidFastResult, tmdbId, isTv, season, episode, title);
         } catch (err) {
           console.warn(TAG + ' ❌ ' + server.name + ' error: ' + (err.message || err));
         }

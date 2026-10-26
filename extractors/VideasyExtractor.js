@@ -147,15 +147,6 @@
       ];
 
       var amharicLabel = 'Amharic (\u1260\u1275\u122d\u1309\u121d)';
-      if (!result.qualities) {
-        result.qualities = [{ quality: result.quality || 'Auto', url: result.url }];
-      }
-      if (!result.qualities.some(function (q) { return q.quality === amharicLabel; })) {
-        result.qualities.push({
-          quality: amharicLabel,
-          url: amharicUrl,
-        });
-      }
 
       result.audioTracks = [
         {

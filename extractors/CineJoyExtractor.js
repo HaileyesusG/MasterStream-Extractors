@@ -126,6 +126,79 @@
    *   Mobile: (tmdbId, isTv, season, episode)
    *   TV:     (tmdbId, imdbId, title, isTv, season, episode, year)
    */
+  
+  // Catalog of Amharic dubbed movies and TV series
+  var AMHARIC_CATALOG = {
+    tv: {
+      '288673_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+      '1407_1_8': {
+        title: 'Carrie (Homeland) S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        fallbackUrl: 'https://stream.unlockify.ink/internal-stream/AgADcR4AAnAzSFI',
+      },
+    },
+    movies: {},
+  };
+
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
+    try {
+      var s = Number(season || 1);
+      var e = Number(episode || 1);
+      var item = null;
+      if (isTvShow) {
+        var tvKey = String(tmdbId) + '_' + s + '_' + e;
+        item = AMHARIC_CATALOG.tv[tvKey];
+        if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
+          item = AMHARIC_CATALOG.tv['288673_1_8'];
+        }
+      } else {
+        item = AMHARIC_CATALOG.movies[String(tmdbId)];
+      }
+
+      if (!item) return result;
+
+      var amharicUrl = item.uniqueId
+        ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
+        : (item.fallbackUrl || item.streamUrl);
+
+      var englishQualities = (result.qualities && result.qualities.length > 0)
+        ? result.qualities
+        : [{ quality: result.quality || 'Auto', url: result.url }];
+
+      var amharicQualities = [
+        { quality: '1080p', url: amharicUrl },
+        { quality: 'Auto', url: amharicUrl },
+      ];
+
+      var amharicLabel = 'Amharic (\u1260\u1275\u122d\u1309\u121d)';
+
+      var existingAudio = result.audioTracks || [
+        {
+          language: 'English',
+          url: result.url,
+          qualities: englishQualities,
+        },
+      ];
+
+      if (!existingAudio.some(function (a) { return a.language === amharicLabel; })) {
+        existingAudio.push({
+          language: amharicLabel,
+          url: amharicUrl,
+          qualities: amharicQualities,
+        });
+      }
+      result.audioTracks = existingAudio;
+
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
+    } catch (attachErr) {}
+    return result;
+  }
+
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var imdbId, title, isTv, season, episode, year;
 
@@ -780,7 +853,7 @@
           ')'
       );
 
-      return {
+      var cineJoyResult = {
         url: primaryUrl,
         quality: 'Auto',
         provider: 'CineJoy',
@@ -793,6 +866,7 @@
         qualities: finalQualities,
         audioTracks: audioTracks.length > 1 ? audioTracks : undefined,
       };
+      return await attachAmharicAudioTrack(cineJoyResult, tmdbId, isTvShow, season, episode, title);
     } catch (err) {
       console.error(TAG + ' ❌ Extraction failed: ' + (err.message || err));
       return null;

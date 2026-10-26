@@ -158,6 +158,16 @@
           qualities: amharicQualities,
         },
       ];
+
+      // Also append to qualities so TV APKs without audioTracks support can switch to Amharic
+      if (Array.isArray(result.qualities)) {
+        if (!result.qualities.some(q => q.quality && q.quality.includes('Amharic'))) {
+          result.qualities.push({
+            quality: 'Amharic (\u1260\u1275\u122d\u1309\u121d)',
+            url: amharicUrl,
+          });
+        }
+      }
       console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
     } catch (attachErr) {}
     return result;

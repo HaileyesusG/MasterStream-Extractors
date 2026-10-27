@@ -629,112 +629,6 @@
     return result;
   }
 
-  
-  async function extractViaVixSrc(tmdbId, isTv, season, episode) {
-    var VIX_DOMAIN = 'https://vixsrc.to';
-    var s = season || 1;
-    var e = episode || 1;
-    var apiUrl = isTv
-      ? VIX_DOMAIN + '/api/tv/' + tmdbId + '/' + s + '/' + e
-      : VIX_DOMAIN + '/api/movie/' + tmdbId;
-
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (err) {} }, 3000) : null;
-
-    var apiRes = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': VIX_DOMAIN + '/',
-        'Origin': VIX_DOMAIN,
-        'Accept': '*/*',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      signal: controller ? controller.signal : undefined,
-    });
-    if (timer) clearTimeout(timer);
-    if (!apiRes || !apiRes.ok) return null;
-
-    var apiData = await apiRes.json();
-    if (!apiData || !apiData.src) return null;
-
-    var embedUrl = apiData.src.indexOf('http') === 0 ? apiData.src : VIX_DOMAIN + apiData.src;
-
-    var cookieHeader = '';
-    try {
-      if (apiRes.headers && typeof apiRes.headers.get === 'function') {
-        var rawCookies = apiRes.headers.get('set-cookie');
-        if (rawCookies) {
-          cookieHeader = rawCookies.split(/,(?=\s*[A-Za-z0-9_]+\=)/).map(function (c) { return c.split(';')[0].trim(); }).filter(Boolean).join('; ');
-        }
-      }
-    } catch (cErr) {}
-
-    var embedHeaders = {
-      'User-Agent': USER_AGENT,
-      'Referer': VIX_DOMAIN + '/',
-      'Origin': VIX_DOMAIN,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    };
-    if (cookieHeader) embedHeaders['Cookie'] = cookieHeader;
-
-    var embedController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var embedTimer = embedController ? setTimeout(function () { try { embedController.abort(); } catch (err) {} }, 3000) : null;
-
-    var embedRes = await fetch(embedUrl, {
-      headers: embedHeaders,
-      signal: embedController ? embedController.signal : undefined,
-    });
-    if (embedTimer) clearTimeout(embedTimer);
-    if (!embedRes || !embedRes.ok) return null;
-
-    var embedHtml = await embedRes.text();
-
-    var tokenMatch = embedHtml.match(/['"]?token['"]?\s*:\s*['"]([^'"]+)/);
-    var expiresMatch = embedHtml.match(/['"]?expires['"]?\s*:\s*['"]([^'"]+)/);
-    var masterUrlMatch = embedHtml.match(/url\s*:\s*['"]([^'"]+)['"]/);
-
-    var token = tokenMatch ? tokenMatch[1] : null;
-    var expires = expiresMatch ? expiresMatch[1] : null;
-    var basePlaylistUrl = masterUrlMatch ? masterUrlMatch[1] : null;
-
-    if (!basePlaylistUrl) {
-      var sourceIdMatch = embedUrl.match(/\/embed\/([^/?#]+)/);
-      if (sourceIdMatch) {
-        basePlaylistUrl = VIX_DOMAIN + '/playlist/' + sourceIdMatch[1];
-      }
-    }
-
-    if (!basePlaylistUrl || !token || !expires) return null;
-
-    if (basePlaylistUrl.indexOf('/') === 0) {
-      basePlaylistUrl = VIX_DOMAIN + basePlaylistUrl;
-    }
-    basePlaylistUrl = basePlaylistUrl.replace(/\\/g, '');
-
-    var joinChar = basePlaylistUrl.indexOf('?') > -1 ? '&' : '?';
-    var finalPlaylistUrl = basePlaylistUrl + joinChar + 'token=' + encodeURIComponent(token) + '&expires=' + encodeURIComponent(expires) + '&h=1&lang=en';
-
-    var resultHeaders = {
-      'User-Agent': USER_AGENT,
-      'Referer': VIX_DOMAIN + '/',
-    };
-    if (cookieHeader) resultHeaders['Cookie'] = cookieHeader;
-
-    var qualities = [
-      { quality: '1080p', url: finalPlaylistUrl },
-      { quality: 'Auto', url: finalPlaylistUrl },
-    ];
-
-    return {
-      url: finalPlaylistUrl,
-      quality: 'Auto',
-      provider: 'LordFlix',
-      headers: resultHeaders,
-      subtitles: [],
-      qualities: qualities,
-    };
-  }
-
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     // Calling convention detection:
     //   4-param: (tmdbId, isTv, season, episode)
@@ -794,18 +688,6 @@
         }
       }
       return null;
-    }
-
-    // 0. INSTANT PATH: Direct vixsrc REST API (<500ms, 99.9% success on TV & Mobile)
-    try {
-      console.log(TAG + ' ⚡ Attempting instant vixsrc extraction...');
-      var vixResult = await extractViaVixSrc(tmdbId, isTvShow, season, episode);
-      if (vixResult && vixResult.url) {
-        console.log(TAG + ' 🚀 Instant vixsrc extraction succeeded in <500ms');
-        return await attachAmharicAudioTrack(vixResult, tmdbId, isTvShow, season, episode, title);
-      }
-    } catch (vixErr) {
-      console.warn(TAG + ' ⚠️ Instant vixsrc failed: ' + (vixErr.message || vixErr));
     }
 
     // 1. FAST PATH: Backend extraction (super fast Node VM / Gigabit / cached in ~1s)

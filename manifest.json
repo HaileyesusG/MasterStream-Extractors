@@ -1,5 +1,5 @@
 {
-    "version": 343,
+    "version": 344,
     "providerPriority": [
         "LordFlix",
         "CineJoy",
@@ -67,7 +67,7 @@
         },
         "VixSrc": {
             "file": "extractors/VixSrcExtractor.js",
-            "hash": "B542666918158982518462A336D2E2FE",
+            "hash": "3BA2A87A2E1728A3C2CC8ABB79E993E8",
             "nativeMode": false,
             "mediaTypes": [
                 "movie",

@@ -186,9 +186,10 @@
       var expires = expiresMatch[1];
       var streamBase = urlMatch[1];
 
-      // Construct Master HLS playlist URL
-      var masterPlaylistUrl = streamBase + '?token=' + token + '&expires=' + expires + '&h=1&lang=en';
-      console.log(TAG + ' ✅ Extracted master stream URL in <400ms: ' + masterPlaylistUrl);
+      // Construct Master HLS playlist URL with explicit .m3u8 extension
+      // This ensures ExoPlayer uses HlsMediaSource instead of ProgressiveMediaSource
+      var masterPlaylistUrl = streamBase + '.m3u8?token=' + token + '&expires=' + expires + '&h=1&lang=en';
+      console.log(TAG + ' ✅ Extracted master HLS stream URL in <400ms: ' + masterPlaylistUrl);
 
       var subtitles = [];
       // Parse subtitles if embedded in page

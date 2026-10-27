@@ -214,11 +214,7 @@
         quality: 'Auto',
         provider: 'VixSrc',
         headers: playbackHeaders,
-        subtitles: subtitles,
-        qualities: [
-          { quality: 'Auto', url: masterPlaylistUrl },
-          { quality: '1080p', url: masterPlaylistUrl }
-        ]
+        subtitles: subtitles
       };
 
       return await attachAmharicAudioTrack(vixSrcResult, tmdbId, isTv, s, e, title);

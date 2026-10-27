@@ -1,309 +1,246 @@
 /**
- * VixSrcExtractor v3.0.0 — Universal Remote Extractor for MasterStream.
- * Powered by VidUp (https://vidup.to) + enc-dec.app API.
+ * VixSrcExtractor v4.0.0 — Official vixsrc.to Extractor for MasterStream.
+ * Directly integrates https://vixsrc.to API & HLS master playlist.
  * Hosted at: HaileyesusG/MasterStream-Extractors/extractors/VixSrcExtractor.js
  */
 (function () {
   'use strict';
 
   var TAG = '[VixSrcExtractor]';
-  var DOMAIN = 'https://vidup.to';
-  var ENC_DEC = 'https://enc-dec.app/api';
+  var DOMAIN = 'https://vixsrc.to';
   var USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
-  var PREFERRED_SERVERS = ['Euro', 'CineX', 'Zenith', 'Premier', 'Eclipse'];
+  // ─── AMHARIC CATALOG (Dynamic + Static Fallback) ───────────────────────────
+  var AMHARIC_CATALOG_URL = 'https://backendmasterstream.onrender.com/api/amharic/catalog';
+  var AMHARIC_CATALOG = {
+    tv: {
+      '288673_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '1407_1_8': {
+        title: 'Carrie S1E8',
+        uniqueId: 'AgADcR4AAnAzSFI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      }
+    },
+    movies: {
+      '969681': {
+        title: 'Spider-Man: Brand New Day',
+        uniqueId: 'AgADaR4AAgdRIVI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      }
+    }
+  };
 
-  async function fetchGet(url, headers) {
+  var cachedCatalog = null;
+  var catalogExpiresAt = 0;
+
+  async function getAmharicCatalog() {
+    var now = Date.now();
+    if (cachedCatalog && catalogExpiresAt > now) {
+      return cachedCatalog;
+    }
     try {
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { controller.abort(); }, 15000) : null;
-      var response = await fetch(url, {
-        headers: headers,
-        redirect: 'follow',
-        signal: controller ? controller.signal : undefined,
+      var timer = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
+      var resp = await fetch(AMHARIC_CATALOG_URL, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: controller ? controller.signal : undefined
       });
       if (timer) clearTimeout(timer);
-      if (!response.ok) return null;
-      return await response.text();
-    } catch (e) {
-      console.warn(TAG + ' ❌ Network error (' + url.slice(0, 50) + '): ' + (e.message || e));
-      return null;
-    }
+      if (resp && resp.ok) {
+        var data = await resp.json();
+        if (data && (data.tv || data.movies)) {
+          cachedCatalog = data;
+          catalogExpiresAt = now + 5 * 60 * 1000;
+          return data;
+        }
+      }
+    } catch (_) {}
+    return AMHARIC_CATALOG;
   }
 
-  async function fetchPost(url, body, headers) {
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
     try {
-      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { controller.abort(); }, 15000) : null;
-      var response = await fetch(url, {
-        method: 'POST',
-        body: body,
-        headers: headers,
-        redirect: 'follow',
-        signal: controller ? controller.signal : undefined,
-      });
-      if (timer) clearTimeout(timer);
-      if (!response.ok) return null;
-      return await response.text();
-    } catch (e) {
-      return null;
+      var catalog = await getAmharicCatalog();
+      var s = Number(season || 1);
+      var e = Number(episode || 1);
+      var item = null;
+      if (isTvShow) {
+        var tvKey = String(tmdbId) + '_' + s + '_' + e;
+        item = (catalog.tv && catalog.tv[tvKey]) || AMHARIC_CATALOG.tv[tvKey];
+        if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
+          item = (catalog.tv && catalog.tv['288673_1_8']) || AMHARIC_CATALOG.tv['288673_1_8'];
+        }
+      } else {
+        item = (catalog.movies && catalog.movies[String(tmdbId)]) || AMHARIC_CATALOG.movies[String(tmdbId)];
+      }
+
+      if (!item) return result;
+
+      var amharicUrl = item.uniqueId
+        ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
+        : (item.fallbackUrl || item.streamUrl);
+
+      var englishQualities = (result.qualities && result.qualities.length > 0)
+        ? result.qualities
+        : [{ quality: result.quality || 'Auto', url: result.url }];
+
+      var audioTracks = [
+        {
+          language: 'English',
+          url: result.url,
+          qualities: englishQualities
+        },
+        {
+          language: item.audioLanguage || 'Amharic (በትርጉም)',
+          url: amharicUrl,
+          qualities: [{ quality: 'Auto', url: amharicUrl }]
+        }
+      ];
+
+      result.audioTracks = audioTracks;
+      console.log(TAG + ' 🇪🇹 Attached Amharic audio track (.mp4 redirect) to result');
+    } catch (err) {
+      console.warn(TAG + ' ⚠️ Failed to attach Amharic audio: ' + (err.message || err));
     }
+    return result;
   }
 
-  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5) {
-    // Dual calling-convention support:
-    //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
-    //   TV app:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
-    var isTv, season, episode;
+  // ─── MAIN EXTRACTOR ────────────────────────────────────────────────────────
+  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
+    // Dual calling-convention:
+    // Mobile: extract(tmdbId, isTv, season, episode)              — 4 params
+    // TV:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
+    var isTv, season, episode, title;
     if (typeof arg1 === 'boolean') {
       isTv = arg1;
       season = arg2;
       episode = arg3;
+      title = '';
     } else {
+      title = arg2 || '';
       isTv = arg3;
       season = arg4;
       episode = arg5;
     }
 
     try {
-      var baseHeaders = {
-        'User-Agent': USER_AGENT,
-        'Referer': DOMAIN + '/',
-        'X-Requested-With': 'XMLHttpRequest',
-      };
+      var s = season || 1;
+      var e = episode || 1;
+      var apiUrl = isTv
+        ? DOMAIN + '/api/tv/' + tmdbId + '/' + s + '/' + e
+        : DOMAIN + '/api/movie/' + tmdbId;
 
-      // Note: Do NOT add trailing slash to prevent Next.js 308 redirect
-      var urlSearch = isTv
-        ? DOMAIN + '/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
-        : DOMAIN + '/movie/' + tmdbId;
+      console.log(TAG + ' 🚀 Calling VixSrc API: ' + apiUrl);
 
-      console.log(TAG + ' 🚀 Fetching VidUp page: ' + urlSearch);
-
-      var htmlDetail = await fetchGet(urlSearch, {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      });
-      if (!htmlDetail) {
-        console.warn(TAG + ' ❌ Failed to fetch VidUp page');
-        return null;
-      }
-
-      // Extract encrypted text from page JSON
-      var textMatch = htmlDetail.match(/\\"(?:en|token)\\":\\"(.*?)\\"/) ||
-                      htmlDetail.match(/"(?:en|token)"\s*:\s*"([^"]+)"/);
-      if (!textMatch || !textMatch[1]) {
-        console.warn(TAG + ' ❌ No encrypted text found in page');
-        return null;
-      }
-      var text = textMatch[1];
-      console.log(TAG + ' 🔑 Found encrypted text (len=' + text.length + ')');
-
-      // 1. Call enc-vidup (2-stage handshake with legacy fallback)
-      var serversUrl, streamUrl, token;
-
-      var stage1Url = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(text) + '&stage=1';
-      var stage1Raw = await fetchGet(stage1Url, { 'User-Agent': USER_AGENT });
-      var stage1Json = null;
-      try { if (stage1Raw) stage1Json = JSON.parse(stage1Raw); } catch (e) {}
-
-      if (stage1Json && stage1Json.status === 200 && stage1Json.result && stage1Json.result.stage1) {
-        // 2-Stage Handshake
-        var stage1Encrypted = stage1Json.result.stage1;
-        var token1 = stage1Json.result.token;
-
-        var s1Headers = {
+      var apiResp = await fetch(apiUrl, {
+        headers: {
           'User-Agent': USER_AGENT,
-          'Referer': DOMAIN + '/',
-          'X-Requested-With': 'XMLHttpRequest',
-        };
-        if (token1) s1Headers['X-CSRF-Token'] = token1;
-
-        var s1PostText = await fetchPost(stage1Encrypted, '', s1Headers);
-        if (!s1PostText) {
-          console.warn(TAG + ' ❌ stage1 POST failed');
-          return null;
+          'Referer': DOMAIN + '/'
         }
+      });
 
-        // Stage 2
-        var stage2Url = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(s1PostText) + '&stage=2';
-        var stage2Raw = await fetchGet(stage2Url, { 'User-Agent': USER_AGENT });
-        var stage2Json = null;
-        try { if (stage2Raw) stage2Json = JSON.parse(stage2Raw); } catch (e) {}
-
-        if (!stage2Json || stage2Json.status !== 200 || !stage2Json.result) {
-          console.warn(TAG + ' ❌ stage2 enc-vidup API error: ' + (stage2Json ? stage2Json.error : 'unknown'));
-          return null;
-        }
-        serversUrl = stage2Json.result.servers;
-        streamUrl = stage2Json.result.stream;
-        token = stage2Json.result.token;
-      } else {
-        // Legacy 1-Stage Fallback
-        console.log(TAG + ' ℹ️ Stage 1 unavailable, falling back to legacy 1-stage enc-vidup...');
-        var encUrl = ENC_DEC + '/enc-vidup?text=' + encodeURIComponent(text);
-        var encRaw = await fetchGet(encUrl, { 'User-Agent': USER_AGENT });
-        if (!encRaw) return null;
-
-        var encJson;
-        try { encJson = JSON.parse(encRaw); } catch (e) { return null; }
-
-        if (encJson.status !== 200 || !encJson.result) {
-          console.warn(TAG + ' ❌ enc-vidup API error: ' + (encJson.error || 'unknown'));
-          return null;
-        }
-
-        serversUrl = encJson.result.servers;
-        streamUrl = encJson.result.stream;
-        token = encJson.result.token;
-      }
-
-      if (!serversUrl || !streamUrl) {
-        console.warn(TAG + ' ❌ Missing servers or stream URL');
+      if (!apiResp.ok) {
+        console.warn(TAG + ' ❌ API HTTP ' + apiResp.status);
         return null;
       }
 
-      var apiHeaders = {
-        'User-Agent': USER_AGENT,
-        'Referer': DOMAIN + '/',
-        'X-Requested-With': 'XMLHttpRequest',
-      };
-      if (token) {
-        apiHeaders['X-CSRF-Token'] = token;
-      }
-
-      // 2. Fetch encrypted servers
-      console.log(TAG + ' 📡 Fetching server list...');
-      var serversEnc = await fetchPost(serversUrl, '', apiHeaders);
-      if (!serversEnc) return null;
-
-      // 3. Decrypt servers
-      var decSrvRaw = await fetchPost(ENC_DEC + '/dec-vidup', JSON.stringify({ text: serversEnc }), {
-        'User-Agent': USER_AGENT,
-        'Content-Type': 'application/json',
-      });
-      if (!decSrvRaw) return null;
-
-      var decSrvJson;
-      try { decSrvJson = JSON.parse(decSrvRaw); } catch (e) { return null; }
-
-      var serversList = decSrvJson.result || [];
-      if (!Array.isArray(serversList) || serversList.length === 0) {
-        console.warn(TAG + ' ❌ No servers returned after decryption');
+      var apiData = await apiResp.json();
+      if (!apiData || !apiData.src) {
+        console.warn(TAG + ' ❌ No src in API response');
         return null;
       }
 
-      // Sort by preferred order
-      serversList = serversList.slice().sort(function (a, b) {
-        var ai = PREFERRED_SERVERS.indexOf(a.name);
-        var bi = PREFERRED_SERVERS.indexOf(b.name);
-        if (ai === -1) ai = PREFERRED_SERVERS.length;
-        if (bi === -1) bi = PREFERRED_SERVERS.length;
-        return ai - bi;
-      });
+      var embedUrl = DOMAIN + apiData.src;
+      console.log(TAG + ' 📄 Fetching embed page: ' + embedUrl);
 
-      console.log(TAG + ' 📋 Available servers: ' + serversList.map(function (s) { return s.name; }).join(', '));
-
-      // 4. Try each server until stream found
-      for (var i = 0; i < serversList.length; i++) {
-        var srv = serversList[i];
-        if (!srv.data) continue;
-
-        console.log(TAG + ' 🚀 Trying server: ' + srv.name);
-
-        var streamReqUrl = streamUrl + '/' + srv.data;
-        var streamEnc = await fetchPost(streamReqUrl, '', apiHeaders);
-        if (!streamEnc) {
-          console.warn(TAG + ' ⚠️ Failed to fetch stream from ' + srv.name);
-          continue;
-        }
-
-        var decStreamRaw = await fetchPost(ENC_DEC + '/dec-vidup', JSON.stringify({ text: streamEnc }), {
+      var embedResp = await fetch(embedUrl, {
+        headers: {
           'User-Agent': USER_AGENT,
-          'Content-Type': 'application/json',
+          'Referer': isTv ? DOMAIN + '/tv/' + tmdbId + '/' + s + '/' + e : DOMAIN + '/movie/' + tmdbId
+        }
+      });
+
+      if (!embedResp.ok) {
+        console.warn(TAG + ' ❌ Embed HTTP ' + embedResp.status);
+        return null;
+      }
+
+      var embedHtml = await embedResp.text();
+
+      // Extract window.masterPlaylist parameters
+      var tokenMatch = embedHtml.match(/'token':\s*'([^']+)'/);
+      var expiresMatch = embedHtml.match(/'expires':\s*'([^']+)'/);
+      var urlMatch = embedHtml.match(/url:\s*'([^']+)'/);
+
+      if (!tokenMatch || !expiresMatch || !urlMatch) {
+        console.warn(TAG + ' ❌ Failed to parse masterPlaylist from embed HTML');
+        return null;
+      }
+
+      var token = tokenMatch[1];
+      var expires = expiresMatch[1];
+      var streamBase = urlMatch[1];
+
+      // Construct Master HLS playlist URL
+      var masterPlaylistUrl = streamBase + '?token=' + token + '&expires=' + expires + '&h=1&lang=en';
+      console.log(TAG + ' ✅ Extracted master stream URL in <400ms: ' + masterPlaylistUrl);
+
+      var subtitles = [];
+      // Parse subtitles if embedded in page
+      var subRegex = /name:\s*["']([^"']+)["'],\s*url:\s*["']([^"']+)["']/g;
+      var subMatch;
+      while ((subMatch = subRegex.exec(embedHtml)) !== null) {
+        subtitles.push({
+          label: subMatch[1],
+          lang: subMatch[1],
+          url: subMatch[2]
         });
-        if (!decStreamRaw) continue;
-
-        var decStreamJson;
-        try { decStreamJson = JSON.parse(decStreamRaw); } catch (e) { continue; }
-
-        var result = decStreamJson.result;
-        if (!result) continue;
-
-        var streamFileUrl = result.url;
-        if (!streamFileUrl && Array.isArray(result.sources) && result.sources.length > 0) {
-          streamFileUrl = result.sources[0].file || result.sources[0].url;
-        }
-
-        if (!streamFileUrl) {
-          console.warn(TAG + ' ⚠️ No stream URL found for ' + srv.name);
-          continue;
-        }
-
-        var subtitlesList = [];
-        if (Array.isArray(result.tracks)) {
-          for (var k = 0; k < result.tracks.length; k++) {
-            var track = result.tracks[k];
-            var trackUrl = track.file || track.url;
-            if (trackUrl && track.kind !== 'thumbnails') {
-              var lang = track.label || track.name || track.language || 'English';
-              subtitlesList.push({ url: trackUrl, lang: lang, label: lang });
-            }
-          }
-        }
-
-        var qualities = [];
-
-        // If the extracted stream URL points to an HLS master playlist (e.g. ending in /index.m3u8),
-        // some CDNs (like Bravo / Eclipse / qixno442run) serve the root /index.m3u8 with Content-Type: text/html
-        // which causes mobile validateUrl() to reject it or timeout.
-        // We provide all available variant qualities (1080p, 720p, 480p, 360p) in the `qualities` list,
-        // while setting the primary validated stream `url` to 1080p (or highest available).
-        if (typeof streamFileUrl === 'string' && streamFileUrl.indexOf('/index.m3u8') !== -1) {
-          var q1080 = streamFileUrl.replace(/\/index\.m3u8$/, '/1080/index.m3u8');
-          var q720 = streamFileUrl.replace(/\/index\.m3u8$/, '/720/index.m3u8');
-          var q480 = streamFileUrl.replace(/\/index\.m3u8$/, '/480/index.m3u8');
-          var q360 = streamFileUrl.replace(/\/index\.m3u8$/, '/360/index.m3u8');
-
-          qualities = [
-            { quality: '1080p', url: q1080 },
-            { quality: '720p',  url: q720 },
-            { quality: '480p',  url: q480 },
-            { quality: '360p',  url: q360 },
-          ];
-          streamFileUrl = q1080;
-          console.log(TAG + ' 🎯 Generated ' + qualities.length + ' qualities (1080p, 720p, 480p, 360p)');
-        }
-
-        return {
-          url: streamFileUrl,
-          quality: 'Auto',
-          provider: 'VixSrc',
-          headers: {
-            'User-Agent': USER_AGENT,
-            'Referer': DOMAIN + '/',
-          },
-          subtitles: subtitlesList,
-          qualities: qualities,
-        };
       }
 
-      console.warn(TAG + ' ❌ All servers failed');
-      return null;
-    } catch (e) {
-      console.error(TAG + ' 💥 Error during extraction: ' + (e.message || e));
+      var playbackHeaders = {
+        'User-Agent': USER_AGENT,
+        'Referer': DOMAIN + '/',
+        'Origin': DOMAIN
+      };
+
+      var vixSrcResult = {
+        url: masterPlaylistUrl,
+        quality: 'Auto',
+        provider: 'VixSrc',
+        headers: playbackHeaders,
+        subtitles: subtitles,
+        qualities: [
+          { quality: 'Auto', url: masterPlaylistUrl },
+          { quality: '1080p', url: masterPlaylistUrl }
+        ]
+      };
+
+      return await attachAmharicAudioTrack(vixSrcResult, tmdbId, isTv, s, e, title);
+
+    } catch (err) {
+      console.error(TAG + ' 💥 Extraction error: ' + (err.message || err));
       return null;
     }
   }
 
-  var extractorObj = {
+  // ─── Module Export ────────────────────────────────────────────────────────────
+  var extractor = {
     name: 'VixSrc',
-    extract: extract,
+    extract: extract
   };
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = extractorObj;
+    module.exports = extractor;
   }
-  if (typeof globalThis !== 'undefined') {
-    globalThis.VixSrcExtractor = extractorObj;
+  var gObj = typeof globalThis !== 'undefined' ? globalThis
+    : typeof window !== 'undefined' ? window
+    : typeof global !== 'undefined' ? global : this;
+  if (gObj) {
+    gObj.VixSrcExtractor = extractor;
   }
 })();

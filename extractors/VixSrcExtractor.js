@@ -113,14 +113,14 @@
   // ─── MAIN EXTRACTOR ────────────────────────────────────────────────────────
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     // Dual calling-convention:
-    // Mobile: extract(tmdbId, isTv, season, episode)              — 4 params
+    // Mobile: extract(tmdbId, isTv, season, episode, title)              — 5 params
     // TV:     extract(tmdbId, imdbId, title, isTv, season, episode, year) — 7 params
     var isTv, season, episode, title;
     if (typeof arg1 === 'boolean') {
       isTv = arg1;
       season = arg2;
       episode = arg3;
-      title = '';
+      title = (typeof arg4 === 'string' ? arg4 : '') || '';
     } else {
       title = arg2 || '';
       isTv = arg3;

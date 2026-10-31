@@ -1,16 +1,15 @@
 /**
- * VidVault Remote Extractor (Dual-Engine: VidVault Native MKV + Vidlink MP4 Fallback)
+ * VidVault Remote Extractor (Dual-Engine: VidVault Native Direct + Vidlink MP4 Fallback)
  *
- * Dedicated to downloading movies & TV series in DownloadOptionsModal.
+ * Dedicated to downloading and streaming movies & TV series in MasterStream (DownloadOptionsModal).
  *
- * ENGINE 1 (Native VidVault):
- * - Checks https://vidvault.to/{type}/{tmdbId}
- * - Scrapes ready converted qualities (1080p, 720p, 360p, etc.)
- * - Resolves direct download links from /download-link/{type}/{tmdbId}/{quality}
- * - Emits clean MKV streams with 'Referer': 'https://vidvault.to/' (required by CDN)
+ * ENGINE 1 (Native VidVault Direct):
+ * - Queries https://vidvault.to/media/movie/{tmdbId} or /media/tv/{tmdbId}/{season}/{episode}
+ * - Direct pre-converted streams (MKV & MP4 1080p/720p/480p)
+ * - Emits clean streams with 'Referer': 'https://vidvault.to/' (required by CDN workers)
  *
  * ENGINE 2 (Vidlink Direct MP4 Fallback):
- * - If VidVault returns 404 or has no ready downloads, falls back to Vidlink API
+ * - If VidVault returns 404 or has no streams, falls back to Vidlink API
  * - Provides fast direct progressive MP4 streams
  *
  * Hot-update: run Update-Manifest.ps1, commit and push.
@@ -31,92 +30,101 @@
     return m ? parseInt(m[1], 10) : 0;
   }
 
-  // ─── Engine 1: Native VidVault MKV Scraper ─────────────────────────────────
-  async function extractNativeVidVault(type, tmdbId, season, episode) {
+  // ─── Engine 1: Native VidVault API ───────────────────────────────────────────
+  async function extractNativeVidVault(type, tmdbId, season, episode, title, year) {
     try {
-      var pageUrl = VIDVAULT_BASE + '/' + type + '/' + tmdbId;
-      if (type === 'tv') {
-        pageUrl += '/' + (season || 1) + '/' + (episode || 1);
-      }
+      var mediaUrl = type === 'tv'
+        ? VIDVAULT_BASE + '/media/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
+        : VIDVAULT_BASE + '/media/movie/' + tmdbId;
 
-      console.log(TAG + ' 🌐 [VidVault] Fetching page: ' + pageUrl);
-      var pageRes = await fetch(pageUrl, {
-        headers: { 'User-Agent': USER_AGENT }
-      });
-
-      if (!pageRes.ok) {
-        console.warn(TAG + ' ⚠️ [VidVault] Page HTTP ' + pageRes.status);
-        return null;
-      }
-
-      var html = await pageRes.text();
-
-      // Find ready download qualities: requestDownload('type', 'id', 's', 'e', 'quality')
-      var regex = /requestDownload\('([^']+)',\s*'([^']*)',\s*'([^']*)',\s*'([^']*)',\s*'([^']+)'\)/g;
-      var match;
-      var readyQualities = [];
-      while ((match = regex.exec(html)) !== null) {
-        var q = match[5];
-        if (readyQualities.indexOf(q) === -1) {
-          readyQualities.push(q);
+      console.log(TAG + ' 🚀 [VidVault] Fetching media endpoint: ' + mediaUrl);
+      var res = await fetch(mediaUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': VIDVAULT_BASE + '/',
+          'Origin': VIDVAULT_BASE,
+          'Accept': 'application/json, text/plain, */*'
         }
-      }
+      });
 
-      if (readyQualities.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault] No ready download streams on page');
+      if (!res.ok) {
+        console.warn(TAG + ' ⚠️ [VidVault] Media endpoint HTTP ' + res.status);
         return null;
       }
 
-      console.log(TAG + ' 📋 [VidVault] Found ' + readyQualities.length + ' ready qualities: ' + readyQualities.join(', '));
+      var data = await res.json();
+      if (!data || !Array.isArray(data.direct) || data.direct.length === 0) {
+        console.warn(TAG + ' ⚠️ [VidVault] No direct streams found in response');
+        return null;
+      }
 
-      // Fetch download links for each quality in parallel
-      var qualityResults = await Promise.all(
-        readyQualities.map(async function (q) {
-          var dlUrl = VIDVAULT_BASE + '/download-link/' + type + '/' + tmdbId;
-          if (type === 'tv') {
-            dlUrl += '/' + (season || 1) + '/' + (episode || 1);
+      var safeTitle = (title || (type === 'tv' ? 'Series' : 'Movie'))
+        .replace(/[\\/:*?"<>|]/g, '')
+        .trim();
+      var fileName = type === 'tv'
+        ? (safeTitle + (year ? ' (' + year + ')' : '') + ' S' + (season || 1) + 'E' + (episode || 1))
+        : (safeTitle + (year ? ' (' + year + ')' : ''));
+
+      var parsed = [];
+      for (var i = 0; i < data.direct.length; i++) {
+        var item = data.direct[i];
+        if (!item || !item.path) continue;
+
+        var fmt = (item.format || 'mp4').toLowerCase();
+        var directUrl = VIDVAULT_BASE + item.path;
+        if (!directUrl.toLowerCase().endsWith('.' + fmt)) {
+          directUrl += '.' + fmt;
+        }
+        if (fileName) {
+          directUrl += '?n=' + encodeURIComponent(fileName + '.' + fmt);
+        }
+
+        var qNum = parseQualityNumber(item.quality);
+        var qLabel = '';
+        if (item.quality) {
+          qLabel = item.quality + ' (' + fmt.toUpperCase() + ')';
+        } else {
+          if (fmt === 'mp4') {
+            qLabel = '1080p (MP4)';
+            qNum = 1080;
+          } else {
+            qLabel = '720p (MKV)';
+            qNum = 720;
           }
-          dlUrl += '/' + encodeURIComponent(q);
+        }
+        if (item.size) {
+          qLabel += ' [' + item.size + ']';
+        }
 
-          try {
-            var dlRes = await fetch(dlUrl, {
-              headers: {
-                'User-Agent': USER_AGENT,
-                'Referer': pageUrl
-              }
-            });
-            if (!dlRes.ok) return null;
-            var dlData = await dlRes.json();
-            if (dlData && dlData.url) {
-              var clean = String(dlData.url).split('?')[0].split('#')[0];
-              if (!clean.endsWith('.mkv')) clean += '.mkv';
-              return {
-                quality: q,
-                qualityNum: parseQualityNumber(q),
-                url: clean
-              };
-            }
-          } catch (_) {}
-          return null;
-        })
-      );
+        parsed.push({
+          quality: qLabel,
+          qualityNum: qNum,
+          format: fmt,
+          size: item.size || '',
+          url: directUrl
+        });
+      }
 
-      var validQualities = qualityResults.filter(Boolean);
-      if (validQualities.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault] Failed to resolve download links');
+      if (parsed.length === 0) {
+        console.warn(TAG + ' ⚠️ [VidVault] Direct items could not be parsed');
         return null;
       }
 
-      // Sort descending by resolution (1080p > 720p > 360p)
-      validQualities.sort(function (a, b) {
-        return b.qualityNum - a.qualityNum;
+      // Sort: highest resolution first, prefer MP4 if tied
+      parsed.sort(function (a, b) {
+        if (b.qualityNum !== a.qualityNum) {
+          return b.qualityNum - a.qualityNum;
+        }
+        if (a.format === 'mp4' && b.format !== 'mp4') return -1;
+        if (b.format === 'mp4' && a.format !== 'mp4') return 1;
+        return 0;
       });
 
-      var parsedQualities = validQualities.map(function (v) {
-        return { quality: v.quality, url: v.url };
+      var parsedQualities = parsed.map(function (p) {
+        return { quality: p.quality, url: p.url };
       });
 
-      console.log(TAG + ' ✅ [VidVault] Extracted ' + parsedQualities.length + ' MKV streams, best: ' + parsedQualities[0].quality);
+      console.log(TAG + ' ✅ [VidVault] Extracted ' + parsedQualities.length + ' streams, best: ' + parsedQualities[0].quality);
 
       return {
         url: parsedQualities[0].url,
@@ -136,7 +144,7 @@
     }
   }
 
-  // ─── Engine 2: Vidlink Direct MP4 Fallback ────────────────────────────────
+  // ─── Engine 2: Vidlink Direct MP4 Fallback ───────────────────────────────────
   async function extractVidlinkFallback(type, tmdbId, season, episode) {
     try {
       console.log(TAG + ' 🔄 [Vidlink Fallback] Requesting token for TMDB ' + tmdbId);
@@ -196,7 +204,11 @@
         quality: parsedQualities[0].quality,
         qualities: parsedQualities,
         provider: 'VidVault',
-        headers: {},
+        headers: {
+          'Referer': VIDLINK_BASE + '/',
+          'Origin': VIDLINK_BASE,
+          'User-Agent': USER_AGENT
+        },
         subtitles: subtitles
       };
     } catch (e) {
@@ -205,16 +217,26 @@
     }
   }
 
-  // ─── Main Extract Function ────────────────────────────────────────────────
+  // ─── Main Extract Function ───────────────────────────────────────────────────
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var isTv, season, episode, title, imdbId, year;
 
     // Detect calling convention:
+    // Object param: ({ tmdbId, imdbId, title, isTv, season, episode, year })
     // Mobile 4-param: (tmdbId, isTv, season, episode)
     // Mobile 5-param: (tmdbId, isTv, season, episode, title)
     // Mobile 5-param alt: (tmdbId, imdbId, isTv, season, episode)
     // TV / Full 7-param: (tmdbId, imdbId, title, isTv, season, episode, year)
-    if (typeof arg1 === 'boolean') {
+    if (typeof tmdbId === 'object' && tmdbId !== null) {
+      var opt = tmdbId;
+      tmdbId = opt.tmdbId;
+      imdbId = opt.imdbId;
+      title = opt.title;
+      isTv = !!opt.isTv;
+      season = opt.season;
+      episode = opt.episode;
+      year = opt.year;
+    } else if (typeof arg1 === 'boolean') {
       isTv = arg1;
       season = arg2;
       episode = arg3;
@@ -231,7 +253,7 @@
     } else {
       imdbId = arg1;
       title = typeof arg2 === 'string' ? arg2 : null;
-      isTv = arg3;
+      isTv = !!arg3;
       season = arg4;
       episode = arg5;
       year = arg6;
@@ -239,10 +261,10 @@
 
     try {
       var type = isTv ? 'tv' : 'movie';
-      console.log(TAG + ' 🚀 Extracting for ' + type + ' tmdbId=' + tmdbId + (isTv ? ' (S' + (season || 1) + 'E' + (episode || 1) + ')' : ''));
+      console.log(TAG + ' 🔍 Extracting for ' + type + ' tmdbId=' + tmdbId + (isTv ? ' (S' + (season || 1) + 'E' + (episode || 1) + ')' : ''));
 
-      // 1. Try Native VidVault MKV first (Pre-converted fast direct download)
-      var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode);
+      // 1. Try Native VidVault Direct first (Pre-converted fast direct download)
+      var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode, title, year);
       if (nativeResult) return nativeResult;
 
       // 2. Fall back to Vidlink Direct MP4

@@ -288,14 +288,14 @@
 
       // Find all encrypted v1. payloads in page HTML
       var v1Matches = html.match(/v1\.[a-zA-Z0-9_-]{50,}/g) || [];
-      var streams = [];
+      var initialStreams = [];
       var servers = [];
 
       for (var vi = 0; vi < v1Matches.length; vi++) {
         var data = decryptPayload(v1Matches[vi]);
         if (data) {
           if (Array.isArray(data.streams) && data.streams.length > 0) {
-            streams = streams.concat(data.streams);
+            initialStreams = initialStreams.concat(data.streams);
           }
           if (Array.isArray(data.servers) && servers.length === 0) {
             servers = data.servers;
@@ -303,49 +303,69 @@
         }
       }
 
-      // If initial streams don't have multi-audio languages, query MULTI servers (Prism / Citadel)
-      var hasMultiAudio = false;
-      for (var si = 0; si < streams.length; si++) {
-        if (streams[si].language && streams[si].language.toLowerCase() !== 'undefined') {
-          hasMultiAudio = true;
-          break;
+      // Preferred server query order — edit here to change priority (GitHub hot-update)
+      // Server IDs: prism=Prism(MULTI), singularity=Edge(HD), flux=Flux(HD),
+      //             pulse=Pulse(HD), volt=Volt(HD), nimbus=Nimbus(HD), citadel=Citadel(MULTI)
+      var PREFERRED_SERVERS = ['prism', 'singularity', 'flux', 'pulse', 'volt', 'nimbus', 'citadel'];
+
+      // Sort available servers by preferred order
+      var orderedServers = servers.slice().sort(function (a, b) {
+        var ai = PREFERRED_SERVERS.indexOf((a && a.id) || a);
+        var bi = PREFERRED_SERVERS.indexOf((b && b.id) || b);
+        if (ai === -1) ai = PREFERRED_SERVERS.length;
+        if (bi === -1) bi = PREFERRED_SERVERS.length;
+        return ai - bi;
+      });
+      console.log(TAG + ' \u{1F522} Server order: ' + orderedServers.map(function (s) { return (s && s.label) || s; }).join(' -> '));
+
+      var streams = [];
+
+      if (token && orderedServers.length > 0) {
+        for (var svi = 0; svi < orderedServers.length; svi++) {
+          var sItem = orderedServers[svi];
+          var sId = (sItem && sItem.id) || sItem;
+          try {
+            var qParams = 'kind=' + (isTvShow ? 'tv' : 'movie') +
+              '&provider=' + encodeURIComponent(sId) +
+              '&t=' + encodeURIComponent(token) +
+              '&tmdb=' + encodeURIComponent(id);
+            if (isTvShow) {
+              qParams += '&season=' + encodeURIComponent(season || 1) +
+                '&episode=' + encodeURIComponent(episode || 1);
+            }
+            var sRes = await fetch(DOMAIN + '/api/sources?' + qParams, {
+              headers: {
+                'User-Agent': USER_AGENT,
+                Referer: pageUrl,
+                Origin: DOMAIN,
+              },
+            });
+            if (sRes.ok) {
+              var sText = await sRes.text();
+              var sData = decryptPayload(sText);
+              if (sData && Array.isArray(sData.streams) && sData.streams.length > 0) {
+                console.log(TAG + ' [' + ((sItem && sItem.label) || sId) + '] Got ' + sData.streams.length + ' streams');
+                streams = streams.concat(sData.streams);
+                // Once we have multi-audio streams, stop querying further servers
+                var gotMultiAudio = sData.streams.some(function (s) {
+                  return s.language && s.language.toLowerCase() !== 'undefined';
+                });
+                if (gotMultiAudio) {
+                  console.log(TAG + ' Multi-audio found on [' + ((sItem && sItem.label) || sId) + '], stopping server iteration');
+                  break;
+                }
+              }
+            }
+          } catch (svErr) {
+            // Ignore single server query error
+          }
         }
       }
 
-      if (!hasMultiAudio && token && servers.length > 0) {
-        for (var svi = 0; svi < servers.length; svi++) {
-          var sItem = servers[svi];
-          var sId = (sItem && sItem.id) || sItem;
-          var sTag = sItem && sItem.tag ? String(sItem.tag).toUpperCase() : '';
-          if (sTag === 'MULTI' || sId === 'prism' || sId === 'citadel') {
-            try {
-              var qParams = 'kind=' + (isTvShow ? 'tv' : 'movie') +
-                '&provider=' + encodeURIComponent(sId) +
-                '&t=' + encodeURIComponent(token) +
-                '&tmdb=' + encodeURIComponent(id);
-              if (isTvShow) {
-                qParams += '&season=' + encodeURIComponent(season || 1) +
-                  '&episode=' + encodeURIComponent(episode || 1);
-              }
-              var sRes = await fetch(DOMAIN + '/api/sources?' + qParams, {
-                headers: {
-                  'User-Agent': USER_AGENT,
-                  Referer: pageUrl,
-                  Origin: DOMAIN,
-                },
-              });
-              if (sRes.ok) {
-                var sText = await sRes.text();
-                var sData = decryptPayload(sText);
-                if (sData && Array.isArray(sData.streams) && sData.streams.length > 0) {
-                  streams = streams.concat(sData.streams);
-                }
-              }
-            } catch (svErr) {
-              // Ignore single server query error
-            }
-          }
-        }
+      // Fall back to initial page streams (Edge default) if all server queries returned nothing
+      if (streams.length === 0) {
+        console.log(TAG + ' All server queries empty, falling back to initial page streams');
+        streams = initialStreams;
       }
 
       // Fallback: If no streams decrypted from v1., extract raw .m3u8 URLs from HTML

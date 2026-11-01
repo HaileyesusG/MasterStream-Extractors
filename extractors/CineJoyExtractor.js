@@ -306,15 +306,23 @@
       // Preferred server query order — edit here to change priority (GitHub hot-update)
       // Server IDs: prism=Prism(MULTI), singularity=Edge(HD), flux=Flux(HD),
       //             pulse=Pulse(HD), volt=Volt(HD), nimbus=Nimbus(HD), citadel=Citadel(MULTI)
-      var PREFERRED_SERVERS = ['prism', 'singularity', 'flux', 'pulse', 'volt', 'nimbus', 'citadel'];
+            // Server priority rank: Prism (0), Edge (1), Flux (2), Pulse (3), Volt (4), Nimbus (5), Citadel (6)
+      function getServerRank(s) {
+        if (!s) return 999;
+        var label = ((s && s.label) || '').toLowerCase();
+        var id = ((s && s.id) || String(s)).toLowerCase();
+        if (label === 'prism' || id === 'prism') return 0;
+        if (label === 'edge' || id === 'singularity' || id === 'evion' || id === 'edge') return 1;
+        if (label === 'flux' || id === 'flux') return 2;
+        if (label === 'pulse' || id === 'pulse') return 3;
+        if (label === 'volt' || id === 'volt') return 4;
+        if (label === 'nimbus' || id === 'nimbus') return 5;
+        if (label === 'citadel' || id === 'citadel') return 6;
+        return 999;
+      }
 
-      // Sort available servers by preferred order
       var orderedServers = servers.slice().sort(function (a, b) {
-        var ai = PREFERRED_SERVERS.indexOf((a && a.id) || a);
-        var bi = PREFERRED_SERVERS.indexOf((b && b.id) || b);
-        if (ai === -1) ai = PREFERRED_SERVERS.length;
-        if (bi === -1) bi = PREFERRED_SERVERS.length;
-        return ai - bi;
+        return getServerRank(a) - getServerRank(b);
       });
       console.log(TAG + ' \u{1F522} Server order: ' + orderedServers.map(function (s) { return (s && s.label) || s; }).join(' -> '));
 
@@ -324,13 +332,25 @@
         for (var svi = 0; svi < orderedServers.length; svi++) {
           var sItem = orderedServers[svi];
           var sId = (sItem && sItem.id) || sItem;
+          var sLabel = (sItem && sItem.label) || sId;
+
+          // If this is Edge and initial page load already provided Edge stream, use it instantly
+          var isEdge = (sLabel.toLowerCase() === 'edge' || sId === 'singularity' || sId === 'evion' || sId === 'edge');
+          if (isEdge && initialStreams.length > 0) {
+            console.log(TAG + ' \u2705 [' + sLabel + '] Using ready initial stream (' + initialStreams.length + ' streams)');
+            streams = initialStreams;
+            break;
+          }
+
           try {
             var qParams = 'kind=' + (isTvShow ? 'tv' : 'movie') +
               '&provider=' + encodeURIComponent(sId) +
               '&t=' + encodeURIComponent(token) +
               '&tmdb=' + encodeURIComponent(id);
             if (isTvShow) {
-              qParams += '&season=' + encodeURIComponent(season || 1) +
+              qParams += '&s=' + encodeURIComponent(season || 1) +
+                '&e=' + encodeURIComponent(episode || 1) +
+                '&season=' + encodeURIComponent(season || 1) +
                 '&episode=' + encodeURIComponent(episode || 1);
             }
             var sRes = await fetch(DOMAIN + '/api/sources?' + qParams, {
@@ -344,9 +364,8 @@
               var sText = await sRes.text();
               var sData = decryptPayload(sText);
               if (sData && Array.isArray(sData.streams) && sData.streams.length > 0) {
-                console.log(TAG + ' [' + ((sItem && sItem.label) || sId) + '] Got ' + sData.streams.length + ' streams');
+                console.log(TAG + ' \u2705 [' + sLabel + '] Got ' + sData.streams.length + ' streams');
                 streams = streams.concat(sData.streams);
-                // Stop at the first server that returns streams (order is fixed by PREFERRED_SERVERS)
                 break;
               }
             }
@@ -356,9 +375,8 @@
         }
       }
 
-      // Fall back to initial page streams (Edge default) if all server queries returned nothing
       if (streams.length === 0) {
-        console.log(TAG + ' All server queries empty, falling back to initial page streams');
+        console.log(TAG + ' \u26A0\uFE0F All server queries empty, falling back to initial page streams');
         streams = initialStreams;
       }
 

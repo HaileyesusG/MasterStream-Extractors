@@ -346,14 +346,8 @@
               if (sData && Array.isArray(sData.streams) && sData.streams.length > 0) {
                 console.log(TAG + ' [' + ((sItem && sItem.label) || sId) + '] Got ' + sData.streams.length + ' streams');
                 streams = streams.concat(sData.streams);
-                // Once we have multi-audio streams, stop querying further servers
-                var gotMultiAudio = sData.streams.some(function (s) {
-                  return s.language && s.language.toLowerCase() !== 'undefined';
-                });
-                if (gotMultiAudio) {
-                  console.log(TAG + ' Multi-audio found on [' + ((sItem && sItem.label) || sId) + '], stopping server iteration');
-                  break;
-                }
+                // Stop at the first server that returns streams (order is fixed by PREFERRED_SERVERS)
+                break;
               }
             }
           } catch (svErr) {

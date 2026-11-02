@@ -1,9 +1,9 @@
 {
-    "version":  354,
+    "version":  355,
     "providerPriority":  [
-                             "LordFlix",
-                             "VixSrc",
                              "CineJoy",
+                             "VixSrc",
+                             "LordFlix",
                              "VidFast",
                              "Videasy",
                              "Vidlink",
@@ -76,7 +76,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "36027EB4F4C91E16AD261F45BAAFDE30",
+                                       "hash":  "2CC602B8CDDB98066645F864E504E38D",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

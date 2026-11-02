@@ -20,6 +20,10 @@
   var DECODE_KEY = [86, 110, 51, 72, 106, 87, 56, 102];
   var DECODE_SHIFT = 5;
 
+  // In-memory caches for 0ms repeat/episode lookups
+  var tmdbTitleCache = {};
+  var seriesSearchCache = {};
+
   // ─── Utilities ──────────────────────────────────────────────────────────────
 
   function b64decode(str) {
@@ -233,8 +237,10 @@
   }
 
   async function searchSeries(rawTitle) {
+    if (seriesSearchCache[rawTitle]) return seriesSearchCache[rawTitle];
     // Strip colons and other special chars that break the search
     var query = rawTitle.replace(/[:\-\u2013\u2014]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (seriesSearchCache[query]) return seriesSearchCache[query];
     var url = YOTURKISH_BASE + '/wp-admin/admin-ajax.php?action=searchwp_live_search&swpquery=' + encodeURIComponent(query);
     var html = await fetchText(url, YOTURKISH_BASE + '/');
     if (!html) return null;
@@ -254,12 +260,13 @@
         best = { seriesUrl: m[1], title: candidate };
       }
     }
-    // If there is exactly ONE result return it unconditionally — the search engine
-    // already matched it. If multiple, require at least some score.
     if (!best) return null;
-    if (count === 1) return best;
-    if (bestScore <= 0) return null;
-    return best;
+    if (count === 1 || bestScore > 0) {
+      seriesSearchCache[rawTitle] = best;
+      seriesSearchCache[query] = best;
+      return best;
+    }
+    return null;
   }
 
   /**
@@ -285,16 +292,18 @@
   }
 
   async function fetchTmdbTitles(tmdbId) {
-    // Returns { original, localized } so we can try Turkish name first
+    if (tmdbTitleCache[tmdbId]) return tmdbTitleCache[tmdbId];
     try {
       var url = 'https://api.themoviedb.org/3/tv/' + tmdbId + '?api_key=' + TMDB_KEY;
-      var res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 8000);
+      var res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 5000);
       if (!res.ok) return null;
       var data = await res.json();
-      return {
+      var titles = {
         original: data.original_name || null,
         localized: data.name || null,
       };
+      tmdbTitleCache[tmdbId] = titles;
+      return titles;
     } catch (e) { return null; }
   }
 

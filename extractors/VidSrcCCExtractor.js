@@ -38,10 +38,31 @@
     try { return url.split('/').slice(0, 3).join('/'); } catch (e) { return ''; }
   }
 
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    timeoutMs = timeoutMs || 10000;
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = null;
+    var opts = Object.assign({}, options || {});
+    if (controller) {
+      opts.signal = controller.signal;
+      timer = setTimeout(function () {
+        try { controller.abort(); } catch (e) {}
+      }, timeoutMs);
+    }
+    try {
+      var res = await fetch(url, opts);
+      if (timer) clearTimeout(timer);
+      return res;
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      throw e;
+    }
+  }
+
   async function fetchText(url, referer, extraHeaders) {
     try {
       var headers = Object.assign({ 'User-Agent': UA, 'Referer': referer || YOTURKISH_BASE + '/' }, extraHeaders || {});
-      var res = await fetch(url, { headers: headers });
+      var res = await fetchWithTimeout(url, { headers: headers }, 10000);
       if (!res.ok) {
         console.warn(TAG + ' HTTP ' + res.status + ' for ' + url.slice(0, 70));
         return null;
@@ -253,7 +274,7 @@
     for (var s = 1; s < season; s++) {
       try {
         var url = 'https://api.themoviedb.org/3/tv/' + tmdbId + '/season/' + s + '?api_key=' + TMDB_KEY;
-        var res = await fetch(url);
+        var res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 8000);
         if (res.ok) {
           var data = await res.json();
           total += (data.episodes ? data.episodes.length : 0);
@@ -267,7 +288,7 @@
     // Returns { original, localized } so we can try Turkish name first
     try {
       var url = 'https://api.themoviedb.org/3/tv/' + tmdbId + '?api_key=' + TMDB_KEY;
-      var res = await fetch(url);
+      var res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 8000);
       if (!res.ok) return null;
       var data = await res.json();
       return {
@@ -356,16 +377,15 @@
 
       // 1. Resolve title — try original (Turkish) name first, fall back to localized
       var titlesToTry = [];
-      if (title) {
+      var tmdbTitles = await fetchTmdbTitles(tmdbId);
+      if (tmdbTitles && tmdbTitles.original) {
+        titlesToTry.push(tmdbTitles.original);
+      }
+      if (title && titlesToTry.indexOf(title) === -1) {
         titlesToTry.push(title);
-      } else {
-        var tmdbTitles = await fetchTmdbTitles(tmdbId);
-        if (tmdbTitles) {
-          if (tmdbTitles.original) titlesToTry.push(tmdbTitles.original);
-          if (tmdbTitles.localized && tmdbTitles.localized !== tmdbTitles.original) {
-            titlesToTry.push(tmdbTitles.localized);
-          }
-        }
+      }
+      if (tmdbTitles && tmdbTitles.localized && titlesToTry.indexOf(tmdbTitles.localized) === -1) {
+        titlesToTry.push(tmdbTitles.localized);
       }
       if (titlesToTry.length === 0) {
         console.warn(TAG + ' \u274c Could not resolve title for tmdbId=' + tmdbId);

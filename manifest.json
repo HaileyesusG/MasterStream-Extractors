@@ -1,5 +1,5 @@
 {
-    "version":  351,
+    "version":  352,
     "providerPriority":  [
                              "LordFlix",
                              "CineJoy",
@@ -76,12 +76,14 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "390A0EB8DF51645A7F206040A29B951A",
+                                       "hash":  "5BFEDCA83A0C38B8122DD3DC13023AA4",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"
-                                                      ]
+                                                      ],
+                                       "webBaseUrl":  "https://yoturkish.to/",
+                                       "referer":  "https://yoturkish.to/"
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",

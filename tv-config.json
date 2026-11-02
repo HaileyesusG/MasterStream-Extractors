@@ -1,9 +1,9 @@
 {
-  "version": 176,
+  "version": 177,
   "providerPriority": [
     "LordFlix",
-    "VixSrc",
     "CineJoy",
+    "VixSrc",
     "VidFast",
     "Videasy",
     "Vidlink",

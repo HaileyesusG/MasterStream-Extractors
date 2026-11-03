@@ -351,6 +351,48 @@
   var AMHARIC_CATALOG_URL = 'https://backendmasterstream.onrender.com/api/amharic/catalog';
   var AMHARIC_CATALOG = {
     tv: {
+      '322280_1_1': {
+        title: 'Master Omur S1E1',
+        uniqueId: 'AgADnB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_2': {
+        title: 'Master Omur S1E2',
+        uniqueId: 'AgADsyEAAsRvqVI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_3': {
+        title: 'Master Omur S1E3',
+        uniqueId: 'AgAD3CEAAsRvqVI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_4': {
+        title: 'Master Omur S1E4',
+        uniqueId: 'AgADWx4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_5': {
+        title: 'Master Omur S1E5',
+        uniqueId: 'AgADmB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_6': {
+        title: 'Master Omur S1E6',
+        uniqueId: 'AgADnB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_7': {
+        title: 'Master Omur S1E7',
+        uniqueId: 'AgADJSEAArScKFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '288673_1_1': { title: 'Carrie S1E1', uniqueId: 'AgADLB4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_2': { title: 'Carrie S1E2', uniqueId: 'AgADLB4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_3': { title: 'Carrie S1E3', uniqueId: 'AgADOh4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_4': { title: 'Carrie S1E4', uniqueId: 'AgADSx4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_5': { title: 'Carrie S1E5', uniqueId: 'AgADYR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_6': { title: 'Carrie S1E6', uniqueId: 'AgADaR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_7': { title: 'Carrie S1E7', uniqueId: 'AgADbR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
       '288673_1_8': {
         title: 'Carrie S1E8',
         uniqueId: 'AgADcR4AAnAzSFI',
@@ -367,7 +409,18 @@
         title: 'Spider-Man: Brand New Day',
         uniqueId: 'AgADaR4AAgdRIVI',
         audioLanguage: 'Amharic (በትርጉም)'
-      }
+      },
+      '855435': { title: 'Faces of Death', audioLanguage: 'Amharic (በትርጉም)' },
+      '1007757': { title: 'Swapped', audioLanguage: 'Amharic (በትርጉም)' },
+      '1058424': { title: 'Hope', audioLanguage: 'Amharic (በትርጉም)' },
+      '1101412': { title: 'Fall 2: Deadpoint', audioLanguage: 'Amharic (በትርጉም)' },
+      '1280738': { title: 'The Furious', audioLanguage: 'Amharic (በትርጉም)' },
+      '1288445': { title: 'Mutiny', audioLanguage: 'Amharic (በትርጉም)' },
+      '1507696': { title: 'Apocalypse Z: New World', audioLanguage: 'Amharic (በትርጉም)' },
+      '1515692': { title: 'Baththa', audioLanguage: 'Amharic (በትርጉም)' },
+      '1543142': { title: 'Thai Fighters', audioLanguage: 'Amharic (በትርጉም)' },
+      '1561726': { title: 'Masterplan', audioLanguage: 'Amharic (በትርጉም)' },
+      '1701686': { title: 'World War Bigfoot', audioLanguage: 'Amharic (በትርጉም)' }
     }
   };
 
@@ -381,7 +434,7 @@
     }
     try {
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
+      var timer = controller ? setTimeout(function () { controller.abort(); }, 10000) : null;
       var resp = await fetch(AMHARIC_CATALOG_URL, {
         headers: { 'User-Agent': UA },
         signal: controller ? controller.signal : undefined
@@ -390,52 +443,64 @@
       if (resp && resp.ok) {
         var data = await resp.json();
         if (data && (data.tv || data.movies)) {
-          cachedCatalog = data;
+          var mergedTv = Object.assign({}, AMHARIC_CATALOG.tv, data.tv || {});
+          var mergedMovies = Object.assign({}, AMHARIC_CATALOG.movies, data.movies || {});
+          cachedCatalog = { tv: mergedTv, movies: mergedMovies };
           catalogExpiresAt = now + 5 * 60 * 1000;
-          return data;
+          return cachedCatalog;
         }
       }
     } catch (_) {}
     return AMHARIC_CATALOG;
   }
 
-  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
-    if (!result || !result.url) return result;
+  async function getAmharicItem(tmdbId, isTvShow, season, episode, title) {
     try {
       var catalog = await getAmharicCatalog();
       var s = Number(season || 1);
       var e = Number(episode || 1);
-      var item = null;
       if (isTvShow) {
         var tvKey = String(tmdbId) + '_' + s + '_' + e;
-        item = (catalog.tv && catalog.tv[tvKey]) || AMHARIC_CATALOG.tv[tvKey];
+        var item = (catalog.tv && catalog.tv[tvKey]) || AMHARIC_CATALOG.tv[tvKey];
         if (!item && title && /homeland|carrie/i.test(title) && s === 1 && e === 8) {
           item = (catalog.tv && catalog.tv['288673_1_8']) || AMHARIC_CATALOG.tv['288673_1_8'];
         }
+        return item || null;
       } else {
-        item = (catalog.movies && catalog.movies[String(tmdbId)]) || AMHARIC_CATALOG.movies[String(tmdbId)];
+        return (catalog.movies && catalog.movies[String(tmdbId)]) || AMHARIC_CATALOG.movies[String(tmdbId)] || null;
       }
+    } catch (_) {
+      return null;
+    }
+  }
 
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return result;
+    try {
+      var item = await getAmharicItem(tmdbId, isTvShow, season, episode, title);
       if (!item) return result;
 
       var amharicUrl = item.uniqueId
         ? 'https://backendmasterstream.onrender.com/api/cinejoy/telegram/' + encodeURIComponent(item.uniqueId) + '.mp4'
         : (item.fallbackUrl || item.streamUrl);
 
-      var englishQualities = (result.qualities && result.qualities.length > 0)
+      var originalQualities = (result.qualities && result.qualities.length > 0)
         ? result.qualities
         : [{ quality: result.quality || 'Auto', url: result.url }];
 
       var audioTracks = [
         {
-          language: 'English',
+          language: 'Original Audio (Turkish)',
           url: result.url,
-          qualities: englishQualities
+          qualities: originalQualities
         },
         {
           language: item.audioLanguage || 'Amharic (በትርጉም)',
           url: amharicUrl,
-          qualities: [{ quality: 'Auto', url: amharicUrl }]
+          qualities: [
+            { quality: '1080p', url: amharicUrl },
+            { quality: 'Auto', url: amharicUrl }
+          ]
         }
       ];
 
@@ -543,10 +608,11 @@
         var streamData = await tryExtractStream(src);
         if (streamData && streamData.url) {
           console.log(TAG + ' \u2705 Stream found: ' + streamData.url.slice(0, 80));
-          return {
+          var finalResult = {
             url: streamData.url,
             quality: 'Auto',
             provider: 'VidSrcCC',
+            qualities: [{ quality: 'Auto', url: streamData.url }],
             headers: {
               'User-Agent': UA,
               'Referer': streamData.referer,
@@ -554,6 +620,7 @@
             },
             subtitles: [],
           };
+          return await attachAmharicAudioTrack(finalResult, tmdbId, isTv, season, episode, title);
         }
       }
 

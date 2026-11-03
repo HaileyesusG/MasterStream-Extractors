@@ -11,10 +11,50 @@
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   // Catalog of Amharic dubbed movies and TV series
-  var AMHARIC_CATALOG = {
+    var AMHARIC_CATALOG = {
     tv: {
-      // Format: "{tmdbId}_{season}_{episode}"
-      // Carrie (TMDB 288673) Season 1 Episode 8
+      '322280_1_1': {
+        title: 'Master Omur S1E1',
+        uniqueId: 'AgADnB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_2': {
+        title: 'Master Omur S1E2',
+        uniqueId: 'AgADsyEAAsRvqVI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_3': {
+        title: 'Master Omur S1E3',
+        uniqueId: 'AgAD3CEAAsRvqVI',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_4': {
+        title: 'Master Omur S1E4',
+        uniqueId: 'AgADWx4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_5': {
+        title: 'Master Omur S1E5',
+        uniqueId: 'AgADmB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_6': {
+        title: 'Master Omur S1E6',
+        uniqueId: 'AgADnB4AAkn8IFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '322280_1_7': {
+        title: 'Master Omur S1E7',
+        uniqueId: 'AgADJSEAArScKFM',
+        audioLanguage: 'Amharic (በትርጉም)'
+      },
+      '288673_1_1': { title: 'Carrie S1E1', uniqueId: 'AgADLB4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_2': { title: 'Carrie S1E2', uniqueId: 'AgADLB4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_3': { title: 'Carrie S1E3', uniqueId: 'AgADOh4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_4': { title: 'Carrie S1E4', uniqueId: 'AgADSx4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_5': { title: 'Carrie S1E5', uniqueId: 'AgADYR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_6': { title: 'Carrie S1E6', uniqueId: 'AgADaR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
+      '288673_1_7': { title: 'Carrie S1E7', uniqueId: 'AgADbR4AAnAzSFI', audioLanguage: 'Amharic (በትርጉም)' },
       '288673_1_8': {
         title: 'Carrie',
         season: 1,
@@ -24,7 +64,6 @@
         referer: 'https://stream.unlockify.ink/video/AgADcR4AAnAzSFI',
         quality: '1080p',
       },
-      // Homeland / Carrie (TMDB 1407) Season 1 Episode 8
       '1407_1_8': {
         title: 'Carrie (Homeland)',
         season: 1,
@@ -36,7 +75,18 @@
       },
     },
     movies: {
-      // Format: "{tmdbId}"
+      '969681': { title: 'Spider-Man: Brand New Day', uniqueId: 'AgADaR4AAgdRIVI', audioLanguage: 'Amharic (በትርጉም)' },
+      '855435': { title: 'Faces of Death', audioLanguage: 'Amharic (በትርጉም)' },
+      '1007757': { title: 'Swapped', audioLanguage: 'Amharic (በትርጉም)' },
+      '1058424': { title: 'Hope', audioLanguage: 'Amharic (በትርጉም)' },
+      '1101412': { title: 'Fall 2: Deadpoint', audioLanguage: 'Amharic (በትርጉም)' },
+      '1280738': { title: 'The Furious', audioLanguage: 'Amharic (በትርጉም)' },
+      '1288445': { title: 'Mutiny', audioLanguage: 'Amharic (በትርጉም)' },
+      '1507696': { title: 'Apocalypse Z: New World', audioLanguage: 'Amharic (በትርጉም)' },
+      '1515692': { title: 'Baththa', audioLanguage: 'Amharic (በትርጉም)' },
+      '1543142': { title: 'Thai Fighters', audioLanguage: 'Amharic (በትርጉም)' },
+      '1561726': { title: 'Masterplan', audioLanguage: 'Amharic (በትርጉም)' },
+      '1701686': { title: 'World War Bigfoot', audioLanguage: 'Amharic (በትርጉም)' }
     },
   };
 
@@ -50,7 +100,7 @@
     }
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 10000) : null;
       var res = await fetch('https://backendmasterstream.onrender.com/api/amharic/catalog', {
         signal: controller ? controller.signal : undefined,
       });
@@ -114,6 +164,39 @@
     var referer = item.referer || 'https://stream.unlockify.ink/';
     var quality = item.quality || '1080p';
 
+    var audioTracks = [
+      {
+        language: item.audioLanguage || 'Amharic (በትርጉም)',
+        url: streamUrl,
+        qualities: [
+          { quality: quality, url: streamUrl },
+          { quality: 'Auto', url: streamUrl },
+        ],
+      },
+    ];
+
+    // If Turkish series or VidSrcCC is available, attach Original Audio
+    try {
+      var vidsrcCC = (typeof gObj !== 'undefined' && gObj.VidSrcCCExtractor)
+        ? gObj.VidSrcCCExtractor
+        : (typeof require !== 'undefined' ? (function () { try { return require('./VidSrcCCExtractor.js'); } catch (_) { return null; } })() : null);
+
+      if (vidsrcCC && typeof vidsrcCC.extract === 'function') {
+        var origRes = await vidsrcCC.extract(tmdbId, imdbId, title, isTv, season, episode, year);
+        if (origRes && origRes.url && origRes.url !== streamUrl) {
+          var origLang = (String(tmdbId) === '322280' || (title && /omur|usta|uzak|sehir/i.test(title)))
+            ? 'Original Audio (Turkish)'
+            : 'Original Audio';
+          audioTracks.unshift({
+            language: origLang,
+            url: origRes.url,
+            qualities: origRes.qualities || [{ quality: origRes.quality || 'Auto', url: origRes.url }]
+          });
+          console.log(TAG + ' 🇹🇷 Attached original audio track from VidSrcCC to Vidlink');
+        }
+      }
+    } catch (_) {}
+
     return {
       url: streamUrl,
       quality: quality,
@@ -127,16 +210,7 @@
         { quality: quality, url: streamUrl },
         { quality: 'Auto', url: streamUrl },
       ],
-      audioTracks: [
-        {
-          language: 'Amharic (በትርጉም)',
-          url: streamUrl,
-          qualities: [
-            { quality: quality, url: streamUrl },
-            { quality: 'Auto', url: streamUrl },
-          ],
-        },
-      ],
+      audioTracks: audioTracks,
     };
   }
 

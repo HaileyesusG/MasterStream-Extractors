@@ -216,9 +216,39 @@
 
   // ─── YoTurkish page logic ───────────────────────────────────────────────────
 
+    // Known series slugs on yoturkish.to for instant 0ms resolution
+  var KNOWN_SERIES_SLUGS = {
+    242551: 'ruzgarli-tepe', // Rüzgarlı Tepe / Winds of Love
+    306215: 'sevdigim-sensin', // Sevdiğim Sensin
+    322280: 'omur-usta' // Master Omur / Ömür Usta
+  };
+
+  /**
+   * Transliterates Turkish characters with diacritics into plain ASCII equivalents.
+   * Required because yoturkish.to's searchwp engine fails on non-ASCII characters
+   * like 'ü', 'ı', 'ş', 'ğ', 'ç', 'ö', 'İ'.
+   */
+  function transliterateTurkish(str) {
+    if (!str) return '';
+    var trMap = {
+      'ç': 'c', 'Ç': 'C',
+      'ğ': 'g', 'Ğ': 'G',
+      'ı': 'i', 'İ': 'I',
+      'ö': 'o', 'Ö': 'O',
+      'ş': 's', 'Ş': 'S',
+      'ü': 'u', 'Ü': 'U',
+      'â': 'a', 'Â': 'A',
+      'î': 'i', 'Î': 'I',
+      'û': 'u', 'Û': 'U'
+    };
+    return str.replace(/[çğışöüâîûÇĞİŞÖÜÂÎÛ]/g, function (ch) {
+      return trMap[ch] || ch;
+    });
+  }
+
   function normalizeTitle(t) {
-    // Lowercase, strip punctuation/special chars, collapse spaces
-    return (t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    // Transliterate Turkish special characters, lowercase, strip punctuation, collapse spaces
+    return transliterateTurkish(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
   function titleScore(query, candidate) {
@@ -226,6 +256,7 @@
     var c = normalizeTitle(candidate);
     if (c === q) return 100;
     if (c.indexOf(q) !== -1) return 80;
+    if (q.indexOf(c) !== -1) return 80;
     // Word overlap
     var qWords = q.split(' ');
     var cWords = c.split(' ');
@@ -238,8 +269,9 @@
 
   async function searchSeries(rawTitle) {
     if (seriesSearchCache[rawTitle]) return seriesSearchCache[rawTitle];
-    // Strip colons and other special chars that break the search
-    var query = rawTitle.replace(/[:\-\u2013\u2014]/g, ' ').replace(/\s+/g, ' ').trim();
+    // Strip colons and other special chars that break the search, and transliterate Turkish
+    var transliterated = transliterateTurkish(rawTitle);
+    var query = transliterated.replace(/[:\-\u2013\u2014]/g, ' ').replace(/\s+/g, ' ').trim();
     if (seriesSearchCache[query]) return seriesSearchCache[query];
     var url = YOTURKISH_BASE + '/wp-admin/admin-ajax.php?action=searchwp_live_search&swpquery=' + encodeURIComponent(query);
     var html = await fetchText(url, YOTURKISH_BASE + '/');
@@ -514,6 +546,125 @@
 
   // ─── Main extraction entry-point ────────────────────────────────────────────
 
+  
+  function resolveUrl(baseUrl, relativeUrl) {
+    try {
+      if (relativeUrl.indexOf('http') === 0) return relativeUrl;
+      return new URL(relativeUrl, baseUrl).toString();
+    } catch (e) {
+      return relativeUrl;
+    }
+  }
+
+  async function processMasterPlaylist(masterUrl, headers) {
+    if (!masterUrl || masterUrl.indexOf('.m3u8') === -1) {
+      return {
+        masterUrl: masterUrl,
+        qualities: [{ quality: 'Auto', url: masterUrl }]
+      };
+    }
+
+    try {
+      var fetchHeaders = Object.assign({ 'User-Agent': UA }, headers || {});
+      var res = await fetchWithTimeout(masterUrl, { headers: fetchHeaders }, 8000);
+      if (!res || !res.ok) {
+        return {
+          masterUrl: masterUrl,
+          qualities: [{ quality: 'Auto', url: masterUrl }]
+        };
+      }
+      var rawM3u8 = await res.text();
+      var lines = rawM3u8.split('\n');
+      var cleanLines = [];
+      var variants = [];
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        // Drop all I-FRAME lines (prevents ExoPlayer on TV from creating duplicate/non-working 480p & 720p tracks)
+        if (line.indexOf('#EXT-X-I-FRAME-STREAM-INF') === 0) {
+          continue;
+        }
+
+        if (line.indexOf('#EXT-X-STREAM-INF:') === 0) {
+          cleanLines.push(lines[i]);
+          if (i + 1 < lines.length) {
+            var streamLine = lines[i + 1].trim();
+            if (streamLine && streamLine.charAt(0) !== '#') {
+              var qLabel = 'Auto';
+              var resMatch = line.match(/RESOLUTION=(\d+)x(\d+)/i);
+              if (resMatch) {
+                qLabel = resMatch[2] + 'p';
+              } else {
+                var bwMatch = line.match(/BANDWIDTH=(\d+)/i);
+                if (bwMatch) qLabel = Math.round(parseInt(bwMatch[1], 10) / 1000) + 'k';
+              }
+
+              var fullUrl = streamLine;
+              if (fullUrl.indexOf('http') !== 0) {
+                fullUrl = resolveUrl(masterUrl, streamLine);
+              }
+
+              variants.push({
+                quality: qLabel,
+                url: fullUrl
+              });
+              cleanLines.push(lines[i + 1]);
+              i++;
+            }
+          }
+        } else {
+          cleanLines.push(lines[i]);
+        }
+      }
+
+      var cleanM3u8 = cleanLines.join('\n');
+      var primaryMasterUrl = masterUrl;
+
+      // Store clean m3u8 (without I-frames) on backend so TV ExoPlayer doesn't get duplicate tracks
+      if (variants.length > 0 && cleanM3u8.length > 20) {
+        try {
+          var storeRes = await fetchWithTimeout('https://backendmasterstream.onrender.com/api/cinejoy/playlist/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlist: cleanM3u8 })
+          }, 8000);
+          if (storeRes && storeRes.ok) {
+            var sData = await storeRes.json();
+            if (sData && sData.id) {
+              primaryMasterUrl = 'https://backendmasterstream.onrender.com/api/cinejoy/playlist?id=' + encodeURIComponent(sData.id) + '&ext=.m3u8';
+              console.log(TAG + ' 🛡️ Cleaned master playlist without I-frames stored: ' + primaryMasterUrl);
+            }
+          }
+        } catch (_) {}
+      }
+
+      variants.sort(function (a, b) {
+        var aH = parseInt(a.quality, 10) || 0;
+        var bH = parseInt(b.quality, 10) || 0;
+        return bH - aH;
+      });
+
+      var finalQualities = [{ quality: 'Auto', url: primaryMasterUrl }];
+      for (var v = 0; v < variants.length; v++) {
+        finalQualities.push(variants[v]);
+      }
+
+      console.log(TAG + ' 📺 Resolved ' + finalQualities.length + ' qualities: ' + finalQualities.map(function(q){return q.quality;}).join(', '));
+
+      return {
+        masterUrl: primaryMasterUrl,
+        qualities: finalQualities
+      };
+
+    } catch (e) {
+      console.error(TAG + ' processMasterPlaylist exception:', e);
+      return {
+        masterUrl: masterUrl,
+        qualities: [{ quality: 'Auto', url: masterUrl }]
+      };
+    }
+  }
+
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5 /*, arg6 */) {
     // Detect calling convention:
     //   4-param (mobile VidSrcMe): extract(tmdbId, isTv, season, episode)
@@ -566,13 +717,23 @@
         return null;
       }
 
-      // 2. Find series on yoturkish.to — try each title candidate
+            // 2. Find series on yoturkish.to — check known slugs first, then try each title candidate
       var searchResult = null;
-      for (var t = 0; t < titlesToTry.length; t++) {
-        console.log(TAG + ' \ud83d\udd0d Searching for: "' + titlesToTry[t] + '"');
-        searchResult = await searchSeries(titlesToTry[t]);
-        if (searchResult) break;
-        console.log(TAG + ' \u274c Not found on yoturkish.to: "' + titlesToTry[t] + '"');
+      var numTmdbId = parseInt(tmdbId, 10);
+      if (KNOWN_SERIES_SLUGS[numTmdbId]) {
+        var knownSlug = KNOWN_SERIES_SLUGS[numTmdbId];
+        searchResult = {
+          seriesUrl: YOTURKISH_BASE + '/' + knownSlug + '/',
+          title: knownSlug
+        };
+        console.log(TAG + ' ⚡ Direct known slug match: ' + searchResult.seriesUrl);
+      } else {
+        for (var t = 0; t < titlesToTry.length; t++) {
+          console.log(TAG + ' 🔍 Searching for: "' + titlesToTry[t] + '"');
+          searchResult = await searchSeries(titlesToTry[t]);
+          if (searchResult) break;
+          console.log(TAG + ' ❌ Not found on yoturkish.to: "' + titlesToTry[t] + '"');
+        }
       }
       if (!searchResult) return null;
       console.log(TAG + ' \u2705 Found: "' + searchResult.title + '" \u2192 ' + searchResult.seriesUrl);
@@ -608,16 +769,20 @@
         var streamData = await tryExtractStream(src);
         if (streamData && streamData.url) {
           console.log(TAG + ' \u2705 Stream found: ' + streamData.url.slice(0, 80));
+          var streamHeaders = {
+            'User-Agent': UA,
+            'Referer': streamData.referer,
+            'Origin': (streamData.referer || '').replace(/\/$/, ''),
+          };
+
+          var processed = await processMasterPlaylist(streamData.url, streamHeaders);
+
           var finalResult = {
-            url: streamData.url,
+            url: processed.masterUrl,
             quality: 'Auto',
             provider: 'VidSrcCC',
-            qualities: [{ quality: 'Auto', url: streamData.url }],
-            headers: {
-              'User-Agent': UA,
-              'Referer': streamData.referer,
-              'Origin': (streamData.referer || '').replace(/\/$/, ''),
-            },
+            qualities: processed.qualities,
+            headers: streamHeaders,
             subtitles: [],
           };
           return await attachAmharicAudioTrack(finalResult, tmdbId, isTv, season, episode, title);

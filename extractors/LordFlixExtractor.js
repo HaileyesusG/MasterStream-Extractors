@@ -115,39 +115,141 @@
     return text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
-  // In-memory token cache by origin (JWT is valid for ~3.5 hours)
+    // In-memory token cache by origin (JWT is valid for ~3.5 hours)
   var tokenCache = {};
 
-  async function fetchStreamToken(streamUrl, referer, origin) {
+  async function fetchClientApiToken(id, isTv, season, episode) {
+    try {
+      var embedUrl = isTv
+        ? VIDSRC_BASE + '/embed/tv/' + id + '/' + (season || 1) + '/' + (episode || 1)
+        : VIDSRC_BASE + '/embed/movie/' + id;
+
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+
+      var embedRes = await fetch(embedUrl, {
+        headers: { 'User-Agent': USER_AGENT, 'Referer': VIDSRC_BASE + '/' },
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timer) clearTimeout(timer);
+      if (!embedRes || !embedRes.ok) return null;
+      var embedHtml = await embedRes.text();
+      var apiMatch = embedHtml.match(/data-api="([^"]+)"/);
+      if (!apiMatch) return null;
+
+      var vsSrcPath = apiMatch[1].replace(/&amp;/g, '&');
+      var vsSrcUrl = vsSrcPath.indexOf('http') === 0 ? vsSrcPath : VIDSRC_BASE + vsSrcPath;
+
+      controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+      var vsRes = await fetch(vsSrcUrl, {
+        headers: { 'User-Agent': USER_AGENT, 'Referer': embedUrl },
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timer) clearTimeout(timer);
+      if (!vsRes || !vsRes.ok) return null;
+      var vsJson = await vsRes.json();
+      if (!vsJson || !vsJson.src) return null;
+
+      var landingUrlsToTry = [];
+      if (vsJson.src.indexOf('cloudorchestranova.com') > -1) {
+        landingUrlsToTry.push(vsJson.src);
+        landingUrlsToTry.push(vsJson.src.replace('cloudorchestranova.com', 'stellarconductornexus.com'));
+      } else if (vsJson.src.indexOf('stellarconductornexus.com') > -1) {
+        landingUrlsToTry.push(vsJson.src);
+        landingUrlsToTry.push(vsJson.src.replace('stellarconductornexus.com', 'cloudorchestranova.com'));
+      } else {
+        landingUrlsToTry.push(vsJson.src);
+      }
+
+      for (var li = 0; li < landingUrlsToTry.length; li++) {
+        var landingUrl = landingUrlsToTry[li];
+        var landingOrigin = new URL(landingUrl).origin;
+
+        try {
+          controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+          var landingRes = await fetch(landingUrl, {
+            headers: {
+              'User-Agent': USER_AGENT,
+              'Referer': VIDSRC_BASE + '/',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+            signal: controller ? controller.signal : undefined,
+          });
+          if (timer) clearTimeout(timer);
+          if (!landingRes || !landingRes.ok) continue;
+          var landingHtml = await landingRes.text();
+          var cfgMatch = landingHtml.match(/window\.CFG\s*=\s*({[^;]+});/) ||
+                         landingHtml.match(/window\.CFG\s*=\s*({[\s\S]*?});/);
+          if (!cfgMatch) continue;
+          var cfg = JSON.parse(cfgMatch[1]);
+          if (!cfg.playerUrl) continue;
+
+          var playerUrl = cfg.playerUrl.indexOf('http') === 0 ? cfg.playerUrl : landingOrigin + cfg.playerUrl;
+
+          controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+          var playerRes = await fetch(playerUrl, {
+            headers: { 'User-Agent': USER_AGENT, 'Referer': landingUrl },
+            signal: controller ? controller.signal : undefined,
+          });
+          if (timer) clearTimeout(timer);
+          if (!playerRes || !playerRes.ok) continue;
+          var playerHtml = await playerRes.text();
+          var confMatch = playerHtml.match(/window\.CONFIG\s*=\s*({[^;]+});/) ||
+                          playerHtml.match(/window\.CONFIG\s*=\s*({[\s\S]*?});/);
+          if (!confMatch) continue;
+          var config = JSON.parse(confMatch[1]);
+
+          // If rate-limited on this mirror, try the other mirror
+          if (config.rateLimited || !config.apiToken) {
+            console.warn(TAG + ' ⚠️ Mirror ' + landingOrigin + ' rate-limited, trying alternate mirror...');
+            continue;
+          }
+
+          return {
+            apiToken: config.apiToken,
+            playerUrl: playerUrl,
+            landingOrigin: landingOrigin,
+          };
+        } catch (_) {}
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function fetchStreamToken(streamUrl, referer, origin, apiToken) {
     try {
       var u = new URL(streamUrl);
       var streamOrigin = u.origin;
       var now = Math.floor(Date.now() / 1000);
-      var cached = tokenCache[streamOrigin];
+      var cached = tokenCache[streamOrigin] || tokenCache['__latest__'];
       if (cached && cached.token && cached.exp > now + 300) {
         return cached.token;
       }
 
-      // Candidate token endpoints:
-      // 1. Plain HTTP first: On Android TV, OkHttpClient's FetchBridge throws
-      //    "Chain validation failed" on HTTPS due to outdated system root CA stores.
-      //    Plain HTTP connects without TLS handshake, completely avoiding SSL failure.
-      // 2. HTTPS as fallback (works in browsers / Node / modern mobile).
+      if (!apiToken) return '';
+
       var candidateUrls = [
+        streamOrigin + '/generate.php?api_token=' + encodeURIComponent(apiToken),
+        streamOrigin.replace(/^https:/i, 'http:') + '/generate.php?api_token=' + encodeURIComponent(apiToken),
         streamOrigin + '/generate.php',
-        streamOrigin.replace(/^https:/i, 'http:') + '/generate.php',
       ];
 
       var headerCandidates = [
         {
           'User-Agent': USER_AGENT,
-          'Referer': VIDSRC_BASE + '/',
-          'Origin': VIDSRC_BASE,
+          'Referer': referer || VIDSRC_BASE + '/',
+          'Origin': origin || (referer ? new URL(referer).origin : VIDSRC_BASE),
         },
         {
           'User-Agent': USER_AGENT,
-          'Referer': referer || VIDSRC_BASE + '/',
-          'Origin': origin || (referer ? new URL(referer).origin : VIDSRC_BASE),
+          'Referer': VIDSRC_BASE + '/',
+          'Origin': VIDSRC_BASE,
         },
       ];
 
@@ -160,16 +262,17 @@
             if (res && res.ok) {
               var text = (await res.text()).trim();
               if (text && text.indexOf('eyJ') === 0) {
-                tokenCache[streamOrigin] = {
+                var entry = {
                   token: text,
                   exp: now + 3.5 * 3600,
                 };
+                tokenCache[streamOrigin] = entry;
+                tokenCache['__latest__'] = entry;
+                console.log(TAG + ' 🔑 Successfully minted token for ' + streamOrigin);
                 return text;
               }
             }
-          } catch (fetchErr) {
-            console.warn(TAG + ' ⚠️ Failed token fetch from ' + tokenUrl + ': ' + (fetchErr.message || fetchErr));
-          }
+          } catch (fetchErr) {}
         }
 
         // Also try native XMLHttpRequest (bypasses FetchBridge, uses Chromium's own cert store)
@@ -179,7 +282,7 @@
               if (typeof XMLHttpRequest === 'undefined') return resolve('');
               var xhr = new XMLHttpRequest();
               xhr.open('GET', tokenUrl, true);
-              xhr.timeout = 2000;
+              xhr.timeout = 3000;
               xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 300) {
                   resolve((xhr.responseText || '').trim());
@@ -195,10 +298,13 @@
             }
           });
           if (xhrText && xhrText.indexOf('eyJ') === 0) {
-            tokenCache[streamOrigin] = {
+            var xhrEntry = {
               token: xhrText,
               exp: now + 3.5 * 3600,
             };
+            tokenCache[streamOrigin] = xhrEntry;
+            tokenCache['__latest__'] = xhrEntry;
+            console.log(TAG + ' 🔑 Successfully minted token via XHR for ' + streamOrigin);
             return xhrText;
           }
         } catch (xhrErr) {}
@@ -382,7 +488,7 @@
 
     // 7. Mint stream token for playback
     var primaryUrl = streamUrls[0];
-    var token = await fetchStreamToken(primaryUrl, playerUrl, landingOrigin);
+    var token = await fetchStreamToken(primaryUrl, playerUrl, landingOrigin, config ? config.apiToken : null);
 
     if (!token) {
       console.warn(TAG + ' ⚠️ Token mint failed (generate.php unavailable) — rejecting direct result');
@@ -452,7 +558,14 @@
             var h = parseInt(parts[1] || parts[0], 10);
             if (h > 0) qLabel = h + 'p';
           }
-          var absUrl = new URL(nextLine, masterUrl).href;
+          var parsedAbsUrl = new URL(nextLine, masterUrl);
+          if (!parsedAbsUrl.search && masterUrl.indexOf('token=') > -1) {
+            var tokenParam = masterUrl.match(/[?&](token=[^&]+)/);
+            if (tokenParam) {
+              parsedAbsUrl.search = '?' + tokenParam[1];
+            }
+          }
+          var absUrl = parsedAbsUrl.href;
           qualities.push({ quality: qLabel, url: absUrl });
         }
       }
@@ -480,7 +593,7 @@
       if (isTvShow && episode) query += '&episode=' + encodeURIComponent(String(episode));
 
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 3500) : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 8000) : null;
       var res = await fetch(BACKEND_URL + '?' + query, {
         headers: { Accept: 'application/json' },
         signal: controller ? controller.signal : undefined,
@@ -491,29 +604,56 @@
       if (!data || !data.url) return null;
 
       var rawUrl = data.url.replace(/([?&])token=[^&]*/g, '').replace(/[?&]$/, '');
-      var token = await fetchStreamToken(rawUrl, VIDSRC_BASE + '/', VIDSRC_BASE);
+      var u = new URL(rawUrl);
+      var streamOrigin = u.origin;
+      var now = Math.floor(Date.now() / 1000);
+
+      // Check cache first for 0ms token resolution
+      var token = (tokenCache[streamOrigin] && tokenCache[streamOrigin].exp > now + 300)
+        ? tokenCache[streamOrigin].token
+        : (tokenCache['__latest__'] && tokenCache['__latest__'].exp > now + 300)
+        ? tokenCache['__latest__'].token
+        : null;
+
+      var playerReferer = (data.headers && (data.headers.Referer || data.headers.referer)) || (VIDSRC_BASE + '/');
+      var playerOrigin = (data.headers && (data.headers.Origin || data.headers.origin)) || VIDSRC_BASE;
+
+      if (token) {
+        console.log(TAG + ' ⚡ Reusing active client token for ' + streamOrigin);
+      } else {
+        // Mint client-bound token using client's IP
+        var clientInfo = await fetchClientApiToken(tmdbId || imdbId, isTvShow, season, episode);
+        if (clientInfo && clientInfo.apiToken) {
+          playerReferer = clientInfo.playerUrl;
+          playerOrigin = clientInfo.landingOrigin;
+          token = await fetchStreamToken(rawUrl, playerReferer, playerOrigin, clientInfo.apiToken);
+        }
+      }
+
+      // Fallback: check if data.url already had token
       if (!token && data.url.indexOf('token=') > -1) {
         var match = data.url.match(/[?&]token=([^&]+)/);
         if (match) token = decodeURIComponent(match[1]);
       }
+
       if (!token) {
         console.warn(TAG + ' ⚠️ Backend stream has no valid token — rejecting');
         return null;
       }
+
       var finalUrl = rawUrl + (rawUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token);
-      var qualities = await parseMasterQualities(finalUrl, {
+      var streamHeaders = {
         'User-Agent': USER_AGENT,
-        'Referer': VIDSRC_BASE + '/',
-      });
+        'Referer': playerReferer,
+        'Origin': playerOrigin,
+      };
+      var qualities = await parseMasterQualities(finalUrl, streamHeaders);
 
       return {
         url: finalUrl,
         quality: data.quality || 'Auto',
         provider: 'LordFlix',
-        headers: data.headers || {
-          'User-Agent': USER_AGENT,
-          'Referer': VIDSRC_BASE + '/',
-        },
+        headers: streamHeaders,
         subtitles: data.subtitles || [],
         qualities: qualities,
       };

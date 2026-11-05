@@ -538,9 +538,10 @@
   /** Parse HLS master playlist variants into QualityOption array */
   async function parseMasterQualities(masterUrl, headers) {
     var qualities = [{ quality: 'Auto', url: masterUrl }];
+    var timer = null;
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 1500) : null;
+      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4500) : null;
       var res = await fetch(masterUrl, { headers: headers, signal: controller ? controller.signal : undefined });
       if (timer) clearTimeout(timer);
       if (!res || !res.ok) return qualities;
@@ -577,7 +578,12 @@
         return nb - na;
       });
     } catch (e) {
-      console.warn(TAG + ' ⚠️ Failed to parse master qualities: ' + (e.message || e));
+      if (timer) clearTimeout(timer);
+      if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
+        console.log(TAG + ' ⏱️ Master qualities parse skipped (network latency)');
+      } else {
+        console.warn(TAG + ' ⚠️ Failed to parse master qualities: ' + (e.message || e));
+      }
     }
     return qualities;
   }

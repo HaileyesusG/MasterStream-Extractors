@@ -1,5 +1,5 @@
 /**
- * VidVault Remote Extractor (Dual-Engine: VidVault Native Direct + Vidlink Fallback)
+ * VidVault Remote Extractor (Dual-Engine: VidVault Native Direct + Vidlink MP4 Fallback)
  *
  * Dedicated to downloading and streaming movies & TV series in MasterStream (DownloadOptionsModal).
  *
@@ -8,10 +8,10 @@
  * - Direct pre-converted streams (MKV & MP4 1080p/720p/480p)
  * - Emits clean streams with 'Referer': 'https://vidvault.to/' (required by CDN workers)
  *
- * ENGINE 2 (Vidlink Modern Stream Fallback):
+ * ENGINE 2 (Vidlink Direct MP4 Fallback):
  * - If VidVault returns 404 or has no streams, falls back to Vidlink API
- * - Uses 'X-Playback-Environment': 'webkit' to fetch the real stream (1080p, 720p, 480p)
- * - Proxies streams through surge.flooderrr.store when signed CDN tokens require it
+ * - Provides real downloadable progressive MP4 video streams (1080p, 720p, 480p)
+ * - Removes conflicting headers so download managers and Expo FileSystem download the full movie
  *
  * Hot-update: run Update-Manifest.ps1, commit and push.
  */
@@ -22,7 +22,6 @@
   var VIDVAULT_BASE = 'https://vidvault.to';
   var VIDLINK_BASE = 'https://vidlink.pro';
   var ENC_API = 'https://enc-dec.app/api/enc-vidlink';
-  var SURGE_PROXY_BASE = 'https://surge.flooderrr.store';
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -30,37 +29,6 @@
     if (!qStr) return 0;
     var m = qStr.toString().match(/(\d+)/);
     return m ? parseInt(m[1], 10) : 0;
-  }
-
-  function toBase64Url(str) {
-    var b64;
-    if (typeof Buffer !== 'undefined') {
-      b64 = Buffer.from(str).toString('base64');
-    } else if (typeof btoa === 'function') {
-      b64 = btoa(str);
-    } else {
-      var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-      var out = '';
-      for (var block = 0, charCode, i = 0, map = chars;
-           str.charAt(i | 0) || (map = '=', i % 1);
-           out += map.charAt(63 & block >> 8 - i % 1 * 8)) {
-        charCode = str.charCodeAt(i += 3/4);
-        if (charCode > 0xFF) return '';
-        block = block << 8 | charCode;
-      }
-      b64 = out;
-    }
-    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  function buildProxiedDashUrl(playlist, cookie) {
-    try {
-      var parsed = new URL(playlist);
-      var sc = toBase64Url(cookie);
-      return SURGE_PROXY_BASE + '/sacdn' + parsed.pathname + '?host=' + encodeURIComponent(parsed.origin) + '&sc=' + encodeURIComponent(sc);
-    } catch (e) {
-      return playlist;
-    }
   }
 
   // ─── Engine 1: Native VidVault API ───────────────────────────────────────────
@@ -177,7 +145,7 @@
     }
   }
 
-  // ─── Engine 2: Vidlink Fallback (DASH 1080p/720p/480p + MP4 fallback) ────────
+  // ─── Engine 2: Vidlink Progressive MP4 Fallback ──────────────────────────────
   async function extractVidlinkFallback(type, tmdbId, season, episode) {
     try {
       console.log(TAG + ' 🔄 [Vidlink Fallback] Requesting token for TMDB ' + tmdbId);
@@ -200,14 +168,48 @@
           'User-Agent': USER_AGENT,
           'Referer': pageReferer,
           'Origin': VIDLINK_BASE,
-          'Accept': 'application/json, text/plain, */*',
-          'X-Playback-Environment': 'webkit'
+          'Accept': 'application/json, text/plain, */*'
         }
       });
       if (!apiRes.ok) return null;
       var data = await apiRes.json();
       var stream = data && data.stream;
-      if (!stream) return null;
+      var qualities = stream && stream.qualities;
+      if (!qualities || typeof qualities !== 'object') return null;
+
+      var parsedQualities = [];
+      var q1080 = qualities['1080'] && (qualities['1080'].url || qualities['1080'].file);
+      var q720 = qualities['720'] && (qualities['720'].url || qualities['720'].file);
+      var q480 = qualities['480'] && (qualities['480'].url || qualities['480'].file);
+
+      // Provide 1080p, 720p, and 480p options (no 360p)
+      var effective720 = q720 || q1080;
+
+      if (q1080) {
+        parsedQualities.push({ quality: '1080p', url: q1080 });
+      }
+      if (effective720) {
+        parsedQualities.push({ quality: '720p', url: effective720 });
+      }
+      if (q480) {
+        parsedQualities.push({ quality: '480p', url: q480 });
+      }
+
+      // Fallback if other non-standard resolutions exist
+      if (parsedQualities.length === 0) {
+        var keys = Object.keys(qualities).sort(function (a, b) {
+          return parseInt(b, 10) - parseInt(a, 10);
+        });
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          if (k === '360') continue;
+          var item = qualities[k];
+          var u = item && (item.url || item.file);
+          if (u) parsedQualities.push({ quality: k + 'p', url: u });
+        }
+      }
+
+      if (parsedQualities.length === 0) return null;
 
       var subtitles = [];
       if (Array.isArray(stream.captions)) {
@@ -222,58 +224,15 @@
         }
       }
 
-      var parsedQualities = [];
-
-      // Modern Vidlink engine: DASH streams with resolutions [1080, 720, 480]
-      if (stream.playlist) {
-        var cookie = stream.playlistHeaders && stream.playlistHeaders.Cookie;
-        var playUrl = (stream.requiresProxy && cookie)
-          ? buildProxiedDashUrl(stream.playlist, cookie)
-          : stream.playlist;
-
-        var resolutions = (stream.playbackMetadata && Array.isArray(stream.playbackMetadata.resolutions) && stream.playbackMetadata.resolutions.length > 0)
-          ? stream.playbackMetadata.resolutions.slice()
-          : ['1080', '720', '480'];
-
-        resolutions.sort(function (a, b) {
-          return parseInt(b, 10) - parseInt(a, 10);
-        });
-
-        for (var r = 0; r < resolutions.length; r++) {
-          parsedQualities.push({
-            quality: resolutions[r] + 'p',
-            url: playUrl
-          });
-        }
-      }
-
-      // Legacy fallback: progressive MP4s if present and no playlist
-      if (parsedQualities.length === 0 && stream.qualities && typeof stream.qualities === 'object') {
-        var qualityKeys = Object.keys(stream.qualities).sort(function (a, b) {
-          return parseInt(b, 10) - parseInt(a, 10);
-        });
-        for (var i = 0; i < qualityKeys.length; i++) {
-          var k = qualityKeys[i];
-          var item = stream.qualities[k];
-          var u = item && (item.url || item.file || '');
-          if (u) parsedQualities.push({ url: u, quality: k + 'p' });
-        }
-      }
-
-      if (parsedQualities.length === 0) return null;
-
-      console.log(TAG + ' ✅ [Vidlink Fallback] Extracted ' + parsedQualities.length + ' streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
+      console.log(TAG + ' ✅ [Vidlink Fallback] Extracted ' + parsedQualities.length + ' MP4 streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
 
       return {
         url: parsedQualities[0].url,
         quality: parsedQualities[0].quality,
         qualities: parsedQualities,
         provider: 'VidVault',
-        headers: {
-          'Referer': VIDLINK_BASE + '/',
-          'Origin': VIDLINK_BASE,
-          'User-Agent': USER_AGENT
-        },
+        // CRITICAL: Empty headers so download managers and Expo FileSystem download without conflicting Referer (preventing HTTP 429/428)
+        headers: {},
         subtitles: subtitles
       };
     } catch (e) {
@@ -286,12 +245,6 @@
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var isTv, season, episode, title, imdbId, year;
 
-    // Detect calling convention:
-    // Object param: ({ tmdbId, imdbId, title, isTv, season, episode, year })
-    // Mobile 4-param: (tmdbId, isTv, season, episode)
-    // Mobile 5-param: (tmdbId, isTv, season, episode, title)
-    // Mobile 5-param alt: (tmdbId, imdbId, isTv, season, episode)
-    // TV / Full 7-param: (tmdbId, imdbId, title, isTv, season, episode, year)
     if (typeof tmdbId === 'object' && tmdbId !== null) {
       var opt = tmdbId;
       tmdbId = opt.tmdbId;
@@ -332,7 +285,7 @@
       var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode, title, year);
       if (nativeResult) return nativeResult;
 
-      // 2. Fall back to Vidlink
+      // 2. Fall back to Vidlink Direct MP4
       console.log(TAG + ' 🔄 VidVault native returned no streams, trying Vidlink fallback...');
       var fallbackResult = await extractVidlinkFallback(type, tmdbId, season, episode);
       if (fallbackResult) return fallbackResult;

@@ -1,5 +1,5 @@
 {
-    "version":  365,
+    "version":  366,
     "providerPriority":  [
                              "LordFlix",
                              "CineJoy",
@@ -29,7 +29,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "6D5377F32B99126427195508C479F592",
+                                       "hash":  "D502B05C58201A48F57667192C9EDCAC",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -38,7 +38,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "6478E88F4C029FC8D430063B0CA33C75",
+                                      "hash":  "F4EEB156BC4FDA6AC985FD32E3511655",
                                       "referer":  "https://vidy.st/",
                                       "origin":  "https://vidy.st",
                                       "nativeMode":  false,

@@ -1,17 +1,17 @@
 /**
- * VidVault Remote Extractor (Dual-Engine: VidVault Native Direct + Vidlink MP4 Fallback)
+ * VidVault Remote Extractor (Dual-Engine: Vidlink Priority 1 + VidVault Fallback Priority 2)
  *
  * Dedicated to downloading and streaming movies & TV series in MasterStream (DownloadOptionsModal).
  *
- * ENGINE 1 (Native VidVault Direct):
- * - Queries https://vidvault.to/media/movie/{tmdbId} or /media/tv/{tmdbId}/{season}/{episode}
- * - Direct pre-converted streams (MKV & MP4 1080p/720p/480p)
- * - Emits clean streams with 'Referer': 'https://vidvault.to/' (required by CDN workers)
+ * ENGINE 1 (Vidlink Direct MP4 Priority):
+ * - Primary fast high-speed CDN streams (1080p, 720p, 480p)
+ * - Directly downloadable progressive MP4 video streams
+ * - Clean headers for fast multi-connection downloading in mobile app and external downloaders
  *
- * ENGINE 2 (Vidlink Direct MP4 Fallback):
- * - If VidVault returns 404 or has no streams, falls back to Vidlink API
- * - Provides real downloadable progressive MP4 video streams (1080p, 720p, 480p)
- * - Removes conflicting headers so download managers and Expo FileSystem download the full movie
+ * ENGINE 2 (Native VidVault Direct Fallback):
+ * - Fallback if Vidlink does not have the title
+ * - Queries https://vidvault.to/media/movie/{tmdbId} or /media/tv/{tmdbId}/{season}/{episode}
+ * - Pre-converted MKV & MP4 1080p/720p/480p
  *
  * Hot-update: run Update-Manifest.ps1, commit and push.
  */
@@ -31,124 +31,10 @@
     return m ? parseInt(m[1], 10) : 0;
   }
 
-  // ─── Engine 1: Native VidVault API ───────────────────────────────────────────
-  async function extractNativeVidVault(type, tmdbId, season, episode, title, year) {
+  // ─── Engine 1 (PRIORITY 1): Vidlink Fast Progressive MP4 ─────────────────────
+  async function extractVidlink(type, tmdbId, season, episode) {
     try {
-      var mediaUrl = type === 'tv'
-        ? VIDVAULT_BASE + '/media/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
-        : VIDVAULT_BASE + '/media/movie/' + tmdbId;
-
-      console.log(TAG + ' 🚀 [VidVault] Fetching media endpoint: ' + mediaUrl);
-      var res = await fetch(mediaUrl, {
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Referer': VIDVAULT_BASE + '/',
-          'Origin': VIDVAULT_BASE,
-          'Accept': 'application/json, text/plain, */*'
-        }
-      });
-
-      if (!res.ok) {
-        console.warn(TAG + ' ⚠️ [VidVault] Media endpoint HTTP ' + res.status);
-        return null;
-      }
-
-      var data = await res.json();
-      if (!data || !Array.isArray(data.direct) || data.direct.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault] No direct streams found in response');
-        return null;
-      }
-
-      var safeTitle = (title || (type === 'tv' ? 'Series' : 'Movie'))
-        .replace(/[\\/:*?"<>|]/g, '')
-        .trim();
-      var fileName = type === 'tv'
-        ? (safeTitle + (year ? ' (' + year + ')' : '') + ' S' + (season || 1) + 'E' + (episode || 1))
-        : (safeTitle + (year ? ' (' + year + ')' : ''));
-
-      var parsed = [];
-      for (var i = 0; i < data.direct.length; i++) {
-        var item = data.direct[i];
-        if (!item || !item.path) continue;
-
-        var fmt = (item.format || 'mp4').toLowerCase();
-        var directUrl = VIDVAULT_BASE + item.path;
-        if (!directUrl.toLowerCase().endsWith('.' + fmt)) {
-          directUrl += '.' + fmt;
-        }
-        if (fileName) {
-          directUrl += '?n=' + encodeURIComponent(fileName + '.' + fmt);
-        }
-
-        var qNum = parseQualityNumber(item.quality);
-        var qLabel = '';
-        if (item.quality) {
-          qLabel = item.quality + ' (' + fmt.toUpperCase() + ')';
-        } else {
-          if (fmt === 'mp4') {
-            qLabel = '1080p (MP4)';
-            qNum = 1080;
-          } else {
-            qLabel = '720p (MKV)';
-            qNum = 720;
-          }
-        }
-        if (item.size) {
-          qLabel += ' [' + item.size + ']';
-        }
-
-        parsed.push({
-          quality: qLabel,
-          qualityNum: qNum,
-          format: fmt,
-          size: item.size || '',
-          url: directUrl
-        });
-      }
-
-      if (parsed.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault] Direct items could not be parsed');
-        return null;
-      }
-
-      // Sort: highest resolution first, prefer MP4 if tied
-      parsed.sort(function (a, b) {
-        if (b.qualityNum !== a.qualityNum) {
-          return b.qualityNum - a.qualityNum;
-        }
-        if (a.format === 'mp4' && b.format !== 'mp4') return -1;
-        if (b.format === 'mp4' && a.format !== 'mp4') return 1;
-        return 0;
-      });
-
-      var parsedQualities = parsed.map(function (p) {
-        return { quality: p.quality, url: p.url };
-      });
-
-      console.log(TAG + ' ✅ [VidVault] Extracted ' + parsedQualities.length + ' streams, best: ' + parsedQualities[0].quality);
-
-      return {
-        url: parsedQualities[0].url,
-        quality: parsedQualities[0].quality,
-        qualities: parsedQualities,
-        provider: 'VidVault',
-        headers: {
-          'Referer': VIDVAULT_BASE + '/',
-          'Origin': VIDVAULT_BASE,
-          'User-Agent': USER_AGENT
-        },
-        subtitles: []
-      };
-    } catch (e) {
-      console.warn(TAG + ' ⚠️ [VidVault] Error: ' + (e.message || e));
-      return null;
-    }
-  }
-
-  // ─── Engine 2: Vidlink Progressive MP4 Fallback ──────────────────────────────
-  async function extractVidlinkFallback(type, tmdbId, season, episode) {
-    try {
-      console.log(TAG + ' 🔄 [Vidlink Fallback] Requesting token for TMDB ' + tmdbId);
+      console.log(TAG + ' 🚀 [Vidlink Priority 1] Requesting token for TMDB ' + tmdbId);
       var encRes = await fetch(ENC_API + '?text=' + tmdbId);
       if (!encRes.ok) return null;
       var encJson = await encRes.json();
@@ -224,19 +110,133 @@
         }
       }
 
-      console.log(TAG + ' ✅ [Vidlink Fallback] Extracted ' + parsedQualities.length + ' MP4 streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
+      console.log(TAG + ' ✅ [Vidlink Priority 1] Extracted ' + parsedQualities.length + ' MP4 streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
 
       return {
         url: parsedQualities[0].url,
         quality: parsedQualities[0].quality,
         qualities: parsedQualities,
         provider: 'VidVault',
-        // CRITICAL: Empty headers so download managers and Expo FileSystem download without conflicting Referer (preventing HTTP 429/428)
+        // Clean headers for unthrottled direct downloading
         headers: {},
         subtitles: subtitles
       };
     } catch (e) {
-      console.warn(TAG + ' ⚠️ [Vidlink Fallback] Error: ' + (e.message || e));
+      console.warn(TAG + ' ⚠️ [Vidlink Priority 1] Error: ' + (e.message || e));
+      return null;
+    }
+  }
+
+  // ─── Engine 2 (FALLBACK PRIORITY 2): Native VidVault API ─────────────────────
+  async function extractNativeVidVault(type, tmdbId, season, episode, title, year) {
+    try {
+      var mediaUrl = type === 'tv'
+        ? VIDVAULT_BASE + '/media/tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1)
+        : VIDVAULT_BASE + '/media/movie/' + tmdbId;
+
+      console.log(TAG + ' 🚀 [VidVault Fallback] Fetching media endpoint: ' + mediaUrl);
+      var res = await fetch(mediaUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': VIDVAULT_BASE + '/',
+          'Origin': VIDVAULT_BASE,
+          'Accept': 'application/json, text/plain, */*'
+        }
+      });
+
+      if (!res.ok) {
+        console.warn(TAG + ' ⚠️ [VidVault Fallback] Media endpoint HTTP ' + res.status);
+        return null;
+      }
+
+      var data = await res.json();
+      if (!data || !Array.isArray(data.direct) || data.direct.length === 0) {
+        console.warn(TAG + ' ⚠️ [VidVault Fallback] No direct streams found in response');
+        return null;
+      }
+
+      var safeTitle = (title || (type === 'tv' ? 'Series' : 'Movie'))
+        .replace(/[\\/:*?"<>|]/g, '')
+        .trim();
+      var fileName = type === 'tv'
+        ? (safeTitle + (year ? ' (' + year + ')' : '') + ' S' + (season || 1) + 'E' + (episode || 1))
+        : (safeTitle + (year ? ' (' + year + ')' : ''));
+
+      var parsed = [];
+      for (var i = 0; i < data.direct.length; i++) {
+        var item = data.direct[i];
+        if (!item || !item.path) continue;
+
+        var fmt = (item.format || 'mp4').toLowerCase();
+        var directUrl = VIDVAULT_BASE + item.path;
+        if (!directUrl.toLowerCase().endsWith('.' + fmt)) {
+          directUrl += '.' + fmt;
+        }
+        if (fileName) {
+          directUrl += '?n=' + encodeURIComponent(fileName + '.' + fmt);
+        }
+
+        var qNum = parseQualityNumber(item.quality);
+        var qLabel = '';
+        if (item.quality) {
+          qLabel = item.quality + ' (' + fmt.toUpperCase() + ')';
+        } else {
+          if (fmt === 'mp4') {
+            qLabel = '1080p (MP4)';
+            qNum = 1080;
+          } else {
+            qLabel = '720p (MKV)';
+            qNum = 720;
+          }
+        }
+        if (item.size) {
+          qLabel += ' [' + item.size + ']';
+        }
+
+        parsed.push({
+          quality: qLabel,
+          qualityNum: qNum,
+          format: fmt,
+          size: item.size || '',
+          url: directUrl
+        });
+      }
+
+      if (parsed.length === 0) {
+        console.warn(TAG + ' ⚠️ [VidVault Fallback] Direct items could not be parsed');
+        return null;
+      }
+
+      // Sort: highest resolution first, prefer MP4 if tied
+      parsed.sort(function (a, b) {
+        if (b.qualityNum !== a.qualityNum) {
+          return b.qualityNum - a.qualityNum;
+        }
+        if (a.format === 'mp4' && b.format !== 'mp4') return -1;
+        if (b.format === 'mp4' && a.format !== 'mp4') return 1;
+        return 0;
+      });
+
+      var parsedQualities = parsed.map(function (p) {
+        return { quality: p.quality, url: p.url };
+      });
+
+      console.log(TAG + ' ✅ [VidVault Fallback] Extracted ' + parsedQualities.length + ' streams, best: ' + parsedQualities[0].quality);
+
+      return {
+        url: parsedQualities[0].url,
+        quality: parsedQualities[0].quality,
+        qualities: parsedQualities,
+        provider: 'VidVault',
+        headers: {
+          'Referer': VIDVAULT_BASE + '/',
+          'Origin': VIDVAULT_BASE,
+          'User-Agent': USER_AGENT
+        },
+        subtitles: []
+      };
+    } catch (e) {
+      console.warn(TAG + ' ⚠️ [VidVault Fallback] Error: ' + (e.message || e));
       return null;
     }
   }
@@ -281,16 +281,16 @@
       var type = isTv ? 'tv' : 'movie';
       console.log(TAG + ' 🔍 Extracting for ' + type + ' tmdbId=' + tmdbId + (isTv ? ' (S' + (season || 1) + 'E' + (episode || 1) + ')' : ''));
 
-      // 1. Try Native VidVault Direct first (Pre-converted fast direct download)
+      // 1. Try Vidlink fast MP4 first (PRIORITY 1)
+      var vidlinkResult = await extractVidlink(type, tmdbId, season, episode);
+      if (vidlinkResult) return vidlinkResult;
+
+      // 2. Fall back to Native VidVault Direct (PRIORITY 2 FALLBACK)
+      console.log(TAG + ' 🔄 Vidlink returned no streams, trying VidVault native fallback...');
       var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode, title, year);
       if (nativeResult) return nativeResult;
 
-      // 2. Fall back to Vidlink Direct MP4
-      console.log(TAG + ' 🔄 VidVault native returned no streams, trying Vidlink fallback...');
-      var fallbackResult = await extractVidlinkFallback(type, tmdbId, season, episode);
-      if (fallbackResult) return fallbackResult;
-
-      console.warn(TAG + ' ❌ Both VidVault and fallback failed for tmdbId=' + tmdbId);
+      console.warn(TAG + ' ❌ Both Vidlink and VidVault failed for tmdbId=' + tmdbId);
       return null;
     } catch (e) {
       console.error(TAG + ' 💥 Unexpected extraction error: ' + (e.message || e));

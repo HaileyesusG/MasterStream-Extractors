@@ -1,5 +1,5 @@
 {
-    "version":  368,
+    "version":  369,
     "providerPriority":  [
                              "LordFlix",
                              "CineJoy",
@@ -29,7 +29,7 @@
                                   },
                       "VidVault":  {
                                        "file":  "extractors/VidVaultExtractor.js",
-                                       "hash":  "AC236EC96F97EB76973C829C8A71A5DC",
+                                       "hash":  "527DEF0008C2FAD097B652E722AA05DE",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

@@ -5,11 +5,11 @@
  *
  * ENGINE 1 (Vidlink Direct MP4 Priority):
  * - Primary fast high-speed CDN streams (1080p, 720p, 480p)
- * - Directly downloadable progressive MP4 video streams
- * - Clean headers for fast multi-connection downloading in mobile app and external downloaders
+ * - Automatically performs a fast health check on candidate streams
+ * - If Vidlink returns dead/blocked links (e.g. HTTP 429/428), it automatically falls through to VidVault native
  *
  * ENGINE 2 (Native VidVault Direct Fallback):
- * - Fallback if Vidlink does not have the title
+ * - Fallback if Vidlink does not have the title or Vidlink links are dead
  * - Queries https://vidvault.to/media/movie/{tmdbId} or /media/tv/{tmdbId}/{season}/{episode}
  * - Pre-converted MKV & MP4 1080p/720p/480p
  *
@@ -29,6 +29,26 @@
     if (!qStr) return 0;
     var m = qStr.toString().match(/(\d+)/);
     return m ? parseInt(m[1], 10) : 0;
+  }
+
+  // Fast pre-flight health check to verify a stream link is actually reachable and not blocked (HTTP 429/428/403)
+  async function isStreamPlayable(url, headers) {
+    if (!url) return false;
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
+      var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
+      var res = await fetch(url, {
+        method: 'GET',
+        headers: reqHeaders,
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      // Status 200 or 206 confirms the CDN is alive and serving bytes!
+      return res.status === 200 || res.status === 206;
+    } catch (e) {
+      return false;
+    }
   }
 
   // ─── Engine 1 (PRIORITY 1): Vidlink Fast Progressive MP4 ─────────────────────
@@ -68,7 +88,7 @@
       var q720 = qualities['720'] && (qualities['720'].url || qualities['720'].file);
       var q480 = qualities['480'] && (qualities['480'].url || qualities['480'].file);
 
-      // Provide 1080p, 720p, and 480p options (no 360p)
+      // Provide 1080p, 720p, and 480p options (hide 360p)
       var effective720 = q720 || q1080;
 
       if (q1080) {
@@ -97,6 +117,15 @@
 
       if (parsedQualities.length === 0) return null;
 
+      // ─── STREAM HEALTH CHECK ──────────────────────────────────────────────
+      // Verify that the stream URL actually responds with video data.
+      // If the CDN returns 429/428/403 (dead link), skip Vidlink so VidVault native can take over!
+      var isAlive = await isStreamPlayable(parsedQualities[0].url, {});
+      if (!isAlive) {
+        console.warn(TAG + ' ⚠️ [Vidlink] Stream health check failed (dead or blocked link), skipping to VidVault fallback!');
+        return null;
+      }
+
       var subtitles = [];
       if (Array.isArray(stream.captions)) {
         for (var c = 0; c < stream.captions.length; c++) {
@@ -110,14 +139,13 @@
         }
       }
 
-      console.log(TAG + ' ✅ [Vidlink Priority 1] Extracted ' + parsedQualities.length + ' MP4 streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
+      console.log(TAG + ' ✅ [Vidlink Priority 1] Extracted & verified ' + parsedQualities.length + ' MP4 streams (' + parsedQualities.map(function(q){return q.quality;}).join(', ') + '), best: ' + parsedQualities[0].quality);
 
       return {
         url: parsedQualities[0].url,
         quality: parsedQualities[0].quality,
         qualities: parsedQualities,
         provider: 'VidVault',
-        // Clean headers for unthrottled direct downloading
         headers: {},
         subtitles: subtitles
       };
@@ -286,7 +314,7 @@
       if (vidlinkResult) return vidlinkResult;
 
       // 2. Fall back to Native VidVault Direct (PRIORITY 2 FALLBACK)
-      console.log(TAG + ' 🔄 Vidlink returned no streams, trying VidVault native fallback...');
+      console.log(TAG + ' 🔄 Vidlink skipped/unavailable, trying VidVault native fallback...');
       var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode, title, year);
       if (nativeResult) return nativeResult;
 

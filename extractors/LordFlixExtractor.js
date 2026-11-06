@@ -125,7 +125,7 @@
         : VIDSRC_BASE + '/embed/movie/' + id;
 
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 8000) : null;
 
       var embedRes = await fetch(embedUrl, {
         headers: { 'User-Agent': USER_AGENT, 'Referer': VIDSRC_BASE + '/' },
@@ -141,7 +141,7 @@
       var vsSrcUrl = vsSrcPath.indexOf('http') === 0 ? vsSrcPath : VIDSRC_BASE + vsSrcPath;
 
       controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 8000) : null;
       var vsRes = await fetch(vsSrcUrl, {
         headers: { 'User-Agent': USER_AGENT, 'Referer': embedUrl },
         signal: controller ? controller.signal : undefined,
@@ -168,7 +168,7 @@
 
         try {
           controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 8000) : null;
           var landingRes = await fetch(landingUrl, {
             headers: {
               'User-Agent': USER_AGENT,
@@ -189,7 +189,7 @@
           var playerUrl = cfg.playerUrl.indexOf('http') === 0 ? cfg.playerUrl : landingOrigin + cfg.playerUrl;
 
           controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 4000) : null;
+          timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 8000) : null;
           var playerRes = await fetch(playerUrl, {
             headers: { 'User-Agent': USER_AGENT, 'Referer': landingUrl },
             signal: controller ? controller.signal : undefined,
@@ -258,7 +258,10 @@
         for (var h = 0; h < headerCandidates.length; h++) {
           var headers = headerCandidates[h];
           try {
-            var res = await fetch(tokenUrl, { headers: headers });
+            var tokCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            var tokTimer = tokCtrl ? setTimeout(function () { try { tokCtrl.abort(); } catch (_) {} }, 6000) : null;
+            var res = await fetch(tokenUrl, { headers: headers, signal: tokCtrl ? tokCtrl.signal : undefined });
+            if (tokTimer) clearTimeout(tokTimer);
             if (res && res.ok) {
               var text = (await res.text()).trim();
               if (text && text.indexOf('eyJ') === 0) {
@@ -282,7 +285,7 @@
               if (typeof XMLHttpRequest === 'undefined') return resolve('');
               var xhr = new XMLHttpRequest();
               xhr.open('GET', tokenUrl, true);
-              xhr.timeout = 3000;
+              xhr.timeout = 5000;
               xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 300) {
                   resolve((xhr.responseText || '').trim());
@@ -541,7 +544,7 @@
     var timer = null;
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4500) : null;
+      timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 8000) : null;
       var res = await fetch(masterUrl, { headers: headers, signal: controller ? controller.signal : undefined });
       if (timer) clearTimeout(timer);
       if (!res || !res.ok) return qualities;
@@ -599,7 +602,7 @@
       if (isTvShow && episode) query += '&episode=' + encodeURIComponent(String(episode));
 
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 8000) : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 22000) : null;
       var res = await fetch(BACKEND_URL + '?' + query, {
         headers: { Accept: 'application/json' },
         signal: controller ? controller.signal : undefined,
@@ -636,10 +639,16 @@
         }
       }
 
-      // Fallback: check if data.url already had token
+      // Fallback 1: check if data.url already had token
       if (!token && data.url.indexOf('token=') > -1) {
         var match = data.url.match(/[?&]token=([^&]+)/);
         if (match) token = decodeURIComponent(match[1]);
+      }
+
+      // Fallback 2: check if any active cached token exists
+      if (!token && tokenCache['__latest__'] && tokenCache['__latest__'].exp > now + 60) {
+        token = tokenCache['__latest__'].token;
+        console.log(TAG + ' ⚡ Fallback: Reusing active token from cache');
       }
 
       if (!token) {
@@ -697,7 +706,7 @@
     }
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 5000) : null;
       var res = await fetch('https://backendmasterstream.onrender.com/api/amharic/catalog', {
         signal: controller ? controller.signal : undefined,
       });

@@ -1,5 +1,5 @@
 {
-    "version":  370,
+    "version":  371,
     "providerPriority":  [
                              "LordFlix",
                              "CineJoy",
@@ -19,7 +19,7 @@
     "providers":  {
                       "CineJoy":  {
                                       "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "681FBEDAB777747C724F98D5277A5A59",
+                                      "hash":  "6239C6653C6DF6302D550C972D4EA3D8",
                                       "webBaseUrl":  "https://vidly.pro/",
                                       "nativeMode":  false,
                                       "mediaTypes":  [

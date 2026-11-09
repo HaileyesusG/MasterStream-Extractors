@@ -450,29 +450,27 @@
         });
       }
 
-      // Sort audio languages: English is FIRST. If English is not listed, French is default at index 0.
+      // Sort audio languages: English is FIRST. If English is not listed, Turkish, Spanish, French, etc. are prioritized over Russian.
+      function getLangRank(l) {
+        var s = (l || '').toLowerCase().trim();
+        if (s.indexOf('english') === 0 || s === 'en') return 0;
+        if (s.indexOf('turkish') === 0 || s.indexOf('türk') === 0 || s === 'tr') return 1;
+        if (s.indexOf('spanish') === 0 || s.indexOf('espan') === 0 || s.indexOf('españ') === 0 || s === 'es') return 2;
+        if (s.indexOf('french') === 0 || s.indexOf('fran') === 0 || s === 'fr') return 3;
+        if (s.indexOf('korean') === 0 || s === 'ko') return 4;
+        if (s.indexOf('japanese') === 0 || s === 'ja') return 5;
+        if (s.indexOf('hindi') === 0 || s === 'hi') return 6;
+        if (s.indexOf('german') === 0 || s === 'de') return 7;
+        if (s.indexOf('italian') === 0 || s === 'it') return 8;
+        if (s.indexOf('portuguese') === 0 || s === 'pt') return 9;
+        if (s.indexOf('russian') === 0 || s === 'ru') return 20;
+        return 10;
+      }
+
       langOrder.sort(function (a, b) {
-        var aLow = a.toLowerCase();
-        var bLow = b.toLowerCase();
-        var aIsEng = aLow.indexOf('english') === 0;
-        var bIsEng = bLow.indexOf('english') === 0;
-        if (aIsEng && !bIsEng) return -1;
-        if (!aIsEng && bIsEng) return 1;
-        if (aIsEng && bIsEng) return a.localeCompare(b);
-
-        var aIsFr =
-          aLow.indexOf('french') === 0 ||
-          aLow.indexOf('français') === 0 ||
-          aLow.indexOf('francais') === 0 ||
-          aLow === 'fr';
-        var bIsFr =
-          bLow.indexOf('french') === 0 ||
-          bLow.indexOf('français') === 0 ||
-          bLow.indexOf('francais') === 0 ||
-          bLow === 'fr';
-        if (aIsFr && !bIsFr) return -1;
-        if (!aIsFr && bIsFr) return 1;
-
+        var ra = getLangRank(a);
+        var rb = getLangRank(b);
+        if (ra !== rb) return ra - rb;
         return a.localeCompare(b);
       });
 
@@ -828,21 +826,28 @@
       // Assign language-specific master playlist qualities to each audio track
       for (var atIdx = 0; atIdx < audioTracks.length; atIdx++) {
         var trackLang = audioTracks[atIdx].language;
-        var trackQualities = [];
-        if (storedId) {
+        var originalQualities = langMap[trackLang] || [];
+        var hasSeparateStream = originalQualities.length > 0 && originalQualities[0].url && originalQualities[0].url !== primaryTrack.url;
+
+        if (hasSeparateStream) {
+          // If this language has its own independent stream (e.g. Turkish or Russian with distinct video/burned-in subtitles),
+          // preserve its own distinct master URL and qualities so the on-screen video is NOT overwritten!
+          audioTracks[atIdx].url = originalQualities[0].url;
+          audioTracks[atIdx].qualities = originalQualities;
+        } else if (storedId) {
           var tBaseUrl = baseMasterUrl + '&lang=' + encodeURIComponent(trackLang);
           audioTracks[atIdx].url = tBaseUrl;
-          trackQualities.push({ quality: 'Auto', url: tBaseUrl });
+          var trackQualities = [{ quality: 'Auto', url: tBaseUrl }];
           for (var qi = 0; qi < parsedVariants.length; qi++) {
             trackQualities.push({
               quality: parsedVariants[qi].quality,
               url: tBaseUrl + '&res=' + encodeURIComponent(parsedVariants[qi].quality),
             });
           }
+          audioTracks[atIdx].qualities = trackQualities;
         } else {
-          trackQualities = finalQualities;
+          audioTracks[atIdx].qualities = finalQualities;
         }
-        audioTracks[atIdx].qualities = trackQualities;
       }
       primaryTrack.url = primaryUrl;
 

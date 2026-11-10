@@ -177,96 +177,95 @@
       }
 
       var html = await pageRes.text();
+      var parsed = [];
 
-      // Parse pre-converted ready-to-download items
-      // Pattern: onclick="requestDownload('movie', '786892', '', '', '1080p')"
-      var itemRegex = /<div[^>]*class="quality-item"[^>]*>([\s\S]*?)<\/div>/gi;
+      // ─── Format 1 (Current): Direct window.location.href in download button ────
+      // e.g. <button type="button" class="download-btn" onclick="showToast(); window.location.href='https://cvt...mkv'">
+      //        <span>📥 Download 1080p</span><small>(2.27 GB)</small>
+      //      </button>
+      var btnRegex = /<button[^>]*onclick=["'][^"']*window\.location\.href\s*=\s*['"]([^'"]+)['"][^"']*["'][^>]*>([\s\S]*?)<\/button>/gi;
       var match;
-      var preConverted = [];
 
-      while ((match = itemRegex.exec(html)) !== null) {
-        var itemHtml = match[1];
-        var dlMatch = itemHtml.match(/requestDownload\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/i);
-        var sizeMatch = itemHtml.match(/<small>\(([^)]+)\)<\/small>/i);
-        var size = sizeMatch ? sizeMatch[1] : '';
+      while ((match = btnRegex.exec(html)) !== null) {
+        var rawUrl = match[1];
+        var btnInner = match[2];
 
-        if (dlMatch) {
-          preConverted.push({
-            type: dlMatch[1],
-            id: dlMatch[2],
-            season: dlMatch[3],
-            episode: dlMatch[4],
-            quality: dlMatch[5],
-            size: size
-          });
+        var cleanUrl = String(rawUrl).split('?')[0].split('#')[0];
+        if (!cleanUrl.endsWith('.mkv')) cleanUrl += '.mkv';
+
+        var qMatch = btnInner.match(/Download\s*(\d+p?)/i);
+        var qualityStr = qMatch ? qMatch[1] : '';
+        if (qualityStr && !qualityStr.toLowerCase().endsWith('p')) {
+          qualityStr += 'p';
         }
+
+        var sizeMatch = btnInner.match(/<small>\(([^)]+)\)<\/small>/i);
+        var sizeStr = sizeMatch ? sizeMatch[1] : '';
+
+        var qNum = parseQualityNumber(qualityStr) || 1080;
+        var qLabel = (qualityStr || (qNum + 'p')) + ' (MKV)';
+        if (sizeStr) qLabel += ' [' + sizeStr + ']';
+
+        parsed.push({
+          quality: qLabel,
+          qualityNum: qNum,
+          url: cleanUrl,
+          size: sizeStr
+        });
       }
 
-      // Regex fallback if quality-item wrapper class changes
-      if (preConverted.length === 0) {
-        var directMatches = [...html.matchAll(/requestDownload\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi)];
-        for (var d = 0; d < directMatches.length; d++) {
-          var dm = directMatches[d];
+      // ─── Format 2 (Legacy): requestDownload('movie', 'id', ...) in onclick ─────
+      if (parsed.length === 0) {
+        var preConverted = [];
+        var dlMatches = [...html.matchAll(/requestDownload\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]*)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi)];
+        for (var d = 0; d < dlMatches.length; d++) {
+          var dm = dlMatches[d];
           preConverted.push({
             type: dm[1],
             id: dm[2],
             season: dm[3],
             episode: dm[4],
-            quality: dm[5],
-            size: ''
+            quality: dm[5]
           });
         }
-      }
 
-      if (preConverted.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault Native Fallback] No pre-converted downloads ready on ' + pageUrl);
-        return null;
-      }
-
-      // Request direct download URLs for all ready qualities
-      var parsed = [];
-      for (var i = 0; i < preConverted.length; i++) {
-        var item = preConverted[i];
-        var dlApi = VIDVAULT_BASE + '/download-link/' + encodeURIComponent(item.type) + '/' + encodeURIComponent(item.id);
-        if (item.season && item.episode) {
-          dlApi += '/' + encodeURIComponent(item.season) + '/' + encodeURIComponent(item.episode);
-        }
-        dlApi += '/' + encodeURIComponent(item.quality);
-
-        try {
-          var dlRes = await fetch(dlApi, {
-            headers: {
-              'User-Agent': USER_AGENT,
-              'Referer': pageUrl,
-              'Accept': 'application/json, text/plain, */*'
-            }
-          });
-
-          if (dlRes.ok) {
-            var data = await dlRes.json();
-            if (data && data.url) {
-              var cleanUrl = String(data.url).split('?')[0].split('#')[0];
-              if (!cleanUrl.endsWith('.mkv')) cleanUrl += '.mkv';
-
-              var qNum = parseQualityNumber(item.quality);
-              var qLabel = (item.quality || 'Direct') + ' (MKV)';
-              if (item.size) qLabel += ' [' + item.size + ']';
-
-              parsed.push({
-                quality: qLabel,
-                qualityNum: qNum,
-                url: cleanUrl,
-                size: item.size
-              });
-            }
+        for (var i = 0; i < preConverted.length; i++) {
+          var item = preConverted[i];
+          var dlApi = VIDVAULT_BASE + '/download-link/' + encodeURIComponent(item.type) + '/' + encodeURIComponent(item.id);
+          if (item.season && item.episode) {
+            dlApi += '/' + encodeURIComponent(item.season) + '/' + encodeURIComponent(item.episode);
           }
-        } catch (e) {
-          console.warn(TAG + ' ⚠️ [VidVault Native Fallback] Error requesting download link for ' + item.quality + ': ' + (e.message || e));
+          dlApi += '/' + encodeURIComponent(item.quality);
+
+          try {
+            var dlRes = await fetch(dlApi, {
+              headers: {
+                'User-Agent': USER_AGENT,
+                'Referer': pageUrl,
+                'Accept': 'application/json, text/plain, */*'
+              }
+            });
+            if (dlRes.ok) {
+              var data = await dlRes.json();
+              if (data && data.url) {
+                var cUrl = String(data.url).split('?')[0].split('#')[0];
+                if (!cUrl.endsWith('.mkv')) cUrl += '.mkv';
+
+                var legacyNum = parseQualityNumber(item.quality);
+                parsed.push({
+                  quality: (item.quality || 'Direct') + ' (MKV)',
+                  qualityNum: legacyNum,
+                  url: cUrl,
+                  size: ''
+                });
+              }
+            }
+          } catch (e) {}
         }
       }
 
       if (parsed.length === 0) {
-        console.warn(TAG + ' ⚠️ [VidVault Native Fallback] Could not retrieve any direct download URLs');
+        console.warn(TAG + ' ⚠️ [VidVault Native Fallback] No pre-converted downloads ready on ' + pageUrl);
         return null;
       }
 

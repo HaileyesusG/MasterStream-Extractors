@@ -222,12 +222,13 @@
     }
   }
 
-  async function fetchStreamToken(streamUrl, referer, origin, apiToken) {
+  async function fetchStreamToken(streamUrl, referer, origin, apiToken, cacheId) {
     try {
       var u = new URL(streamUrl);
       var streamOrigin = u.origin;
       var now = Math.floor(Date.now() / 1000);
-      var cached = tokenCache[streamOrigin] || tokenCache['__latest__'];
+      var cacheKey = (cacheId ? (String(cacheId) + '_') : '') + streamOrigin;
+      var cached = tokenCache[cacheKey];
       if (cached && cached.token && cached.exp > now + 300) {
         return cached.token;
       }
@@ -269,9 +270,8 @@
                   token: text,
                   exp: now + 3.5 * 3600,
                 };
-                tokenCache[streamOrigin] = entry;
-                tokenCache['__latest__'] = entry;
-                console.log(TAG + ' 🔑 Successfully minted token for ' + streamOrigin);
+                tokenCache[cacheKey] = entry;
+                console.log(TAG + ' 🔑 Successfully minted token for ' + cacheKey);
                 return text;
               }
             }
@@ -305,9 +305,8 @@
               token: xhrText,
               exp: now + 3.5 * 3600,
             };
-            tokenCache[streamOrigin] = xhrEntry;
-            tokenCache['__latest__'] = xhrEntry;
-            console.log(TAG + ' 🔑 Successfully minted token via XHR for ' + streamOrigin);
+            tokenCache[cacheKey] = xhrEntry;
+            console.log(TAG + ' 🔑 Successfully minted token via XHR for ' + cacheKey);
             return xhrText;
           }
         } catch (xhrErr) {}
@@ -366,15 +365,11 @@
       return null;
     }
 
-    var landingUrlsToTry = [];
+    var landingUrlsToTry = [vsJson.src];
     if (vsJson.src.indexOf('cloudorchestranova.com') > -1) {
       landingUrlsToTry.push(vsJson.src.replace('cloudorchestranova.com', 'stellarconductornexus.com'));
-      landingUrlsToTry.push(vsJson.src);
     } else if (vsJson.src.indexOf('stellarconductornexus.com') > -1) {
-      landingUrlsToTry.push(vsJson.src);
       landingUrlsToTry.push(vsJson.src.replace('stellarconductornexus.com', 'cloudorchestranova.com'));
-    } else {
-      landingUrlsToTry.push(vsJson.src);
     }
 
     var landingUrl = null;
@@ -490,8 +485,16 @@
     }
 
     // 7. Mint stream token for playback
+    var effectiveReferer = landingOrigin ? (landingOrigin + '/') : (playerUrl || (VIDSRC_BASE + '/'));
+    var effectiveOrigin = landingOrigin || (effectiveReferer ? new URL(effectiveReferer).origin : VIDSRC_BASE);
+    var streamHeaders = {
+      'User-Agent': USER_AGENT,
+      'Referer': effectiveReferer,
+      'Origin': effectiveOrigin,
+    };
+
     var primaryUrl = streamUrls[0];
-    var token = await fetchStreamToken(primaryUrl, playerUrl, landingOrigin, config ? config.apiToken : null);
+    var token = await fetchStreamToken(primaryUrl, effectiveReferer, effectiveOrigin, config ? config.apiToken : null, id);
 
     if (!token) {
       console.warn(TAG + ' ⚠️ Token mint failed (generate.php unavailable) — rejecting direct result');
@@ -516,11 +519,7 @@
     }
 
     // Parse HLS master playlist for resolution variants (Auto, 1080p, 720p, 360p, etc.)
-    var qualities = await parseMasterQualities(finalUrl, {
-      'User-Agent': USER_AGENT,
-      'Referer': playerUrl,
-      'Origin': landingOrigin,
-    });
+    var qualities = await parseMasterQualities(finalUrl, streamHeaders);
 
     console.log(TAG + ' ✅ Extracted stream successfully (' + qualities.length + ' qualities)');
 
@@ -528,11 +527,7 @@
       url: finalUrl,
       quality: 'Auto',
       provider: 'LordFlix',
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': playerUrl,
-        'Origin': landingOrigin,
-      },
+      headers: streamHeaders,
       subtitles: subtitles,
       qualities: qualities,
     };
@@ -618,24 +613,27 @@
       var now = Math.floor(Date.now() / 1000);
 
       // Check cache first for 0ms token resolution
-      var token = (tokenCache[streamOrigin] && tokenCache[streamOrigin].exp > now + 300)
+      var cacheId = tmdbId || imdbId;
+      var cacheKey = (cacheId ? (String(cacheId) + '_') : '') + streamOrigin;
+      var cached = tokenCache[cacheKey];
+      var token = (cached && cached.exp > now + 300)
+        ? cached.token
+        : (tokenCache[streamOrigin] && tokenCache[streamOrigin].exp > now + 300)
         ? tokenCache[streamOrigin].token
-        : (tokenCache['__latest__'] && tokenCache['__latest__'].exp > now + 300)
-        ? tokenCache['__latest__'].token
         : null;
 
       var playerReferer = (data.headers && (data.headers.Referer || data.headers.referer)) || (VIDSRC_BASE + '/');
       var playerOrigin = (data.headers && (data.headers.Origin || data.headers.origin)) || VIDSRC_BASE;
 
       if (token) {
-        console.log(TAG + ' ⚡ Reusing active client token for ' + streamOrigin);
+        console.log(TAG + ' ⚡ Reusing active client token for ' + cacheKey);
       } else {
         // Mint client-bound token using client's IP
-        var clientInfo = await fetchClientApiToken(tmdbId || imdbId, isTvShow, season, episode);
+        var clientInfo = await fetchClientApiToken(cacheId, isTvShow, season, episode);
         if (clientInfo && clientInfo.apiToken) {
-          playerReferer = clientInfo.playerUrl;
-          playerOrigin = clientInfo.landingOrigin;
-          token = await fetchStreamToken(rawUrl, playerReferer, playerOrigin, clientInfo.apiToken);
+          playerReferer = clientInfo.landingOrigin ? (clientInfo.landingOrigin + '/') : clientInfo.playerUrl;
+          playerOrigin = clientInfo.landingOrigin || VIDSRC_BASE;
+          token = await fetchStreamToken(rawUrl, playerReferer, playerOrigin, clientInfo.apiToken, cacheId);
         }
       }
 
@@ -788,12 +786,10 @@
           candidateUrl = subLines[0].indexOf('http') === 0 ? subLines[0] : new URL(subLines[0], candidateUrl).href;
         }
 
-        // Probe the actual media segment without headers to simulate native player (ExoPlayer/AVPlayer).
-        // Native video players do not forward custom Referer/Origin headers to individual TS segments.
-        // If segments return 403 without headers, playback will fail on native devices!
+        // Probe the actual media segment with reqHeaders (Referer & Origin forwarded by ExoPlayer)
         var segRes = await fetch(candidateUrl, {
           method: 'GET',
-          headers: { 'Range': 'bytes=0-10' },
+          headers: reqHeaders,
           signal: controller ? controller.signal : undefined
         });
         if (timeoutId) clearTimeout(timeoutId);

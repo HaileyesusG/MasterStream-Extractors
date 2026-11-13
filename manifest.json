@@ -1,5 +1,5 @@
 {
-    "version":  376,
+    "version":  377,
     "providerPriority":  [
                              "CineJoy",
                              "VixSrc",
@@ -19,7 +19,7 @@
     "providers":  {
                       "CineJoy":  {
                                       "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "6239C6653C6DF6302D550C972D4EA3D8",
+                                      "hash":  "1E24A1175671D25058EC868F3275872E",
                                       "webBaseUrl":  "https://vidly.pro/",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
@@ -49,7 +49,7 @@
                                   },
                       "VidFast":  {
                                       "file":  "extractors/VidFastExtractor.js",
-                                      "hash":  "EE06550FC4CA6E3DB2EE447B2323B723",
+                                      "hash":  "995D43A84CB4389AE9219CE9EE8AF97C",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",
@@ -58,7 +58,7 @@
                                   },
                       "Vidlink":  {
                                       "file":  "extractors/VidlinkExtractor.js",
-                                      "hash":  "94690E6E12318B8B794684E5653F0081",
+                                      "hash":  "2DBF0A2DB0FDA610B1F2BD3A7C8DEEB5",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",
@@ -67,7 +67,7 @@
                                   },
                       "VixSrc":  {
                                      "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "F1670F4653ED430372FFD48C0A0AC704",
+                                     "hash":  "13CD3DD7A11009FC3BB2F5C5E070EB8F",
                                      "nativeMode":  false,
                                      "mediaTypes":  [
                                                         "movie",
@@ -76,7 +76,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "8222C929C577F29CE592A9C247D54514",
+                                       "hash":  "521EAADEDA794B87670A6079AED52E82",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",
@@ -85,7 +85,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "98D906C6FF116A9793B1C040DD84E332",
+                                       "hash":  "70A982BC7BBF9B914CDCB62C21D4B72B",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

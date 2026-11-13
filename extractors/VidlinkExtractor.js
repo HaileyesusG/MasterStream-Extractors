@@ -122,7 +122,25 @@
   }
 
 
-  async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
+  
+  async function isStreamPlayable(url, headers) {
+    if (!url) return false;
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4000) : null;
+      var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
+      var res = await fetch(url, {
+        method: 'GET',
+        headers: reqHeaders,
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      return res.status >= 200 && res.status < 400;
+    } catch (e) {
+      return false;
+    }
+  }
+async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     var imdbId, title, isTv, season, episode, year;
 
     if (typeof arg1 === 'boolean') {
@@ -176,6 +194,7 @@
     ];
 
     // If Turkish series or VidSrcCC is available, attach Original Audio
+    var origStream = null;
     try {
       var vidsrcCC = (typeof gObj !== 'undefined' && gObj.VidSrcCCExtractor)
         ? gObj.VidSrcCCExtractor
@@ -184,31 +203,42 @@
       if (vidsrcCC && typeof vidsrcCC.extract === 'function') {
         var origRes = await vidsrcCC.extract(tmdbId, imdbId, title, isTv, season, episode, year);
         if (origRes && origRes.url && origRes.url !== streamUrl) {
-          var origLang = (String(tmdbId) === '322280' || (title && /omur|usta|uzak|sehir/i.test(title)))
-            ? 'Original Audio (Turkish)'
-            : 'Original Audio';
-          audioTracks.unshift({
-            language: origLang,
-            url: origRes.url,
-            qualities: origRes.qualities || [{ quality: origRes.quality || 'Auto', url: origRes.url }]
-          });
-          console.log(TAG + ' 🇹🇷 Attached original audio track from VidSrcCC to Vidlink');
+          var isOrigPlayable = await isStreamPlayable(origRes.url, origRes.headers);
+          if (isOrigPlayable) {
+            origStream = origRes;
+            var origLang = (String(tmdbId) === '322280' || (title && /omur|usta|uzak|sehir/i.test(title)))
+              ? 'Original Audio (Turkish)'
+              : 'Original Audio';
+            audioTracks.unshift({
+              language: origLang,
+              url: origRes.url,
+              qualities: origRes.qualities || [{ quality: origRes.quality || 'Auto', url: origRes.url }]
+            });
+            console.log(TAG + ' 🇹🇷 Attached verified original audio track from VidSrcCC to Vidlink');
+          }
         }
       }
     } catch (_) {}
 
+    // CRITICAL: NEVER return an Amharic-only stream!
+    // A dub is an alternate audio track and MUST be accompanied by the original video stream.
+    if (!origStream || audioTracks.length <= 1) {
+      console.warn(TAG + ' ⚠️ Standalone Amharic dub rejected because original audio stream is not available');
+      return null;
+    }
+
     return {
-      url: streamUrl,
-      quality: quality,
+      url: origStream.url,
+      quality: origStream.quality || quality,
       provider: 'Vidlink',
-      headers: {
+      headers: origStream.headers || {
         'User-Agent': USER_AGENT,
         'Referer': referer,
       },
-      subtitles: [],
-      qualities: [
-        { quality: quality, url: streamUrl },
-        { quality: 'Auto', url: streamUrl },
+      subtitles: origStream.subtitles || [],
+      qualities: origStream.qualities || [
+        { quality: quality, url: origStream.url },
+        { quality: 'Auto', url: origStream.url },
       ],
       audioTracks: audioTracks,
     };

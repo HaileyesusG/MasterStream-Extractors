@@ -66,8 +66,34 @@
     return AMHARIC_CATALOG;
   }
 
-  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
-    if (!result || !result.url) return result;
+  
+  async function isStreamPlayable(url, headers) {
+    if (!url) return false;
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4000) : null;
+      var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
+      var res = await fetch(url, {
+        method: 'GET',
+        headers: reqHeaders,
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      return res.status >= 200 && res.status < 400;
+    } catch (e) {
+      return false;
+    }
+  }
+async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+    if (!result || !result.url) return null;
+
+    // Validate that the primary stream is actually playable before returning success or attaching any dub!
+    var isPlayable = await isStreamPlayable(result.url, result.headers);
+    if (!isPlayable) {
+      console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
+      return null;
+    }
+
     try {
       var catalog = await getAmharicCatalog();
       var s = Number(season || 1);
@@ -121,7 +147,6 @@
     } catch (attachErr) {}
     return result;
   }
-
   async function extract(tmdbId, arg1, arg2, arg3, arg4, arg5, arg6) {
     // Dual calling-convention support:
     //   Mobile app: extract(tmdbId, isTv, season, episode)               — 4 params
@@ -378,7 +403,11 @@
             subtitles: subtitles,
             qualities: qualities,
           };
-          return await attachAmharicAudioTrack(vidFastResult, tmdbId, isTv, season, episode, title);
+          var vfFinal = await attachAmharicAudioTrack(vidFastResult, tmdbId, isTv, season, episode, title);
+          if (vfFinal && vfFinal.url) {
+            return vfFinal;
+          }
+          console.warn(TAG + ' ⚠️ VidFast ' + server.name + ' rejected by health check, trying next server...');
         } catch (err) {
           console.warn(TAG + ' ❌ ' + server.name + ' error: ' + (err.message || err));
         }

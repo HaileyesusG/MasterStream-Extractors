@@ -733,20 +733,87 @@
     if (!url) return false;
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4000) : null;
+      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 5000) : null;
       var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
+      
+      // Step 1: Probe master URL
       var res = await fetch(url, {
         method: 'GET',
         headers: reqHeaders,
         signal: controller ? controller.signal : undefined
       });
-      if (timeoutId) clearTimeout(timeoutId);
-      return res.status >= 200 && res.status < 400;
+      if (!res || !res.ok) {
+        if (timeoutId) clearTimeout(timeoutId);
+        return false;
+      }
+
+      // Step 2: For HLS (.m3u8), deeply validate actual media segments!
+      // Master playlist returning 200 is a common false positive when segments are blocked/403.
+      if (url.indexOf('.m3u8') > -1) {
+        var text = await res.text();
+        if (!text || text.indexOf('#EXTM3U') === -1) {
+          if (timeoutId) clearTimeout(timeoutId);
+          return false;
+        }
+
+        var lines = text.split('\n').map(function (l) { return l.trim(); }).filter(function (l) {
+          return l && l.indexOf('#') !== 0;
+        });
+        if (lines.length === 0) {
+          if (timeoutId) clearTimeout(timeoutId);
+          return false;
+        }
+
+        var candidateUrl = lines[0].indexOf('http') === 0 ? lines[0] : new URL(lines[0], url).href;
+
+        // If candidateUrl is another playlist (variant / quality stream), fetch it to get actual media segment
+        if (candidateUrl.indexOf('.m3u8') > -1 || text.indexOf('#EXT-X-STREAM-INF') > -1) {
+          var subRes = await fetch(candidateUrl, {
+            method: 'GET',
+            headers: reqHeaders,
+            signal: controller ? controller.signal : undefined
+          });
+          if (!subRes || !subRes.ok) {
+            if (timeoutId) clearTimeout(timeoutId);
+            return false;
+          }
+          var subText = await subRes.text();
+          var subLines = subText.split('\n').map(function (l) { return l.trim(); }).filter(function (l) {
+            return l && l.indexOf('#') !== 0;
+          });
+          if (subLines.length === 0) {
+            if (timeoutId) clearTimeout(timeoutId);
+            return false;
+          }
+          candidateUrl = subLines[0].indexOf('http') === 0 ? subLines[0] : new URL(subLines[0], candidateUrl).href;
+        }
+
+        // Probe the actual media segment without headers to simulate native player (ExoPlayer/AVPlayer).
+        // Native video players do not forward custom Referer/Origin headers to individual TS segments.
+        // If segments return 403 without headers, playback will fail on native devices!
+        var segRes = await fetch(candidateUrl, {
+          method: 'GET',
+          headers: { 'Range': 'bytes=0-10' },
+          signal: controller ? controller.signal : undefined
+        });
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (!segRes || (segRes.status !== 200 && segRes.status !== 206)) {
+          console.warn(TAG + ' ❌ Segment health check failed (HTTP ' + (segRes ? segRes.status : 'null') + ') — rejecting false positive');
+          return false;
+        }
+      } else {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (res.status !== 200 && res.status !== 206) return false;
+      }
+
+      return true;
     } catch (e) {
       return false;
     }
   }
-async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
+
+  async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
     if (!result || !result.url) return null;
 
     // Validate that the primary stream is actually playable before returning success or attaching any dub!

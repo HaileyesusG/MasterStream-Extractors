@@ -95,24 +95,64 @@
   async function decryptStreamUrls(vs, encryptedB64, referer) {
     if (!vs || !encryptedB64) return [];
 
-    var modPromise = getWasmModule(vs.w, vs.wasm_url, vs.wasm, referer);
-    if (!modPromise) return [];
+    // 1. Native WebAssembly (Node.js, Android TV WebView / V8)
+    if (typeof WebAssembly !== 'undefined') {
+      try {
+        var modPromise = getWasmModule(vs.w, vs.wasm_url, vs.wasm, referer);
+        if (modPromise) {
+          var mod = await modPromise;
+          var inst = await WebAssembly.instantiate(mod, {});
+          var ex = inst.exports;
 
-    var mod = await modPromise;
-    var inst = await WebAssembly.instantiate(mod, {});
-    var ex = inst.exports;
+          var encBytes = getBase64Bytes(encryptedB64);
+          var ptr = ex.alloc(encBytes.length);
+          new Uint8Array(ex.memory.buffer, ptr, encBytes.length).set(encBytes);
 
-    var encBytes = getBase64Bytes(encryptedB64);
-    var ptr = ex.alloc(encBytes.length);
-    new Uint8Array(ex.memory.buffer, ptr, encBytes.length).set(encBytes);
+          var outLen = ex.decrypt(ptr, encBytes.length);
+          var rawDecoded = new Uint8Array(ex.memory.buffer, ptr + 12, outLen);
+          var text = typeof TextDecoder !== 'undefined'
+            ? new TextDecoder().decode(rawDecoded)
+            : Buffer.from(rawDecoded).toString('utf8');
 
-    var outLen = ex.decrypt(ptr, encBytes.length);
-    var rawDecoded = new Uint8Array(ex.memory.buffer, ptr + 12, outLen);
-    var text = typeof TextDecoder !== 'undefined'
-      ? new TextDecoder().decode(rawDecoded)
-      : Buffer.from(rawDecoded).toString('utf8');
+          var localUrls = text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+          if (localUrls.length > 0) return localUrls;
+        }
+      } catch (wasmErr) {
+        console.warn(TAG + ' ⚠️ Local WASM decrypt failed, falling back to remote decrypt: ' + (wasmErr.message || wasmErr));
+      }
+    }
 
-    return text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    // 2. Remote WASM decryption service (React Native / Hermes where WebAssembly is not available)
+    try {
+      console.log(TAG + ' ⚡ Decrypting stream URLs via remote WASM service...');
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (_) {} }, 10000) : null;
+      var res = await fetch('https://master-stream-web2.vercel.app/api/decrypt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          vs: vs,
+          encryptedB64: encryptedB64,
+          referer: referer,
+        }),
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timer) clearTimeout(timer);
+      if (res && res.ok) {
+        var json = await res.json();
+        if (json && json.ok && Array.isArray(json.urls) && json.urls.length > 0) {
+          console.log(TAG + ' ✅ Remote WASM decrypted ' + json.urls.length + ' streams');
+          return json.urls;
+        }
+      }
+    } catch (remoteErr) {
+      console.warn(TAG + ' ⚠️ Remote WASM decrypt failed: ' + (remoteErr.message || remoteErr));
+    }
+
+    return [];
   }
 
     // In-memory token cache by origin (JWT is valid for ~3.5 hours)
@@ -932,37 +972,35 @@
       return null;
     }
 
-    // 1. FAST PATH: Backend extraction (super fast Node VM / Gigabit / cached in ~1s)
+    // 1. Direct extraction (native client residential IP + local V8 or remote Hermes WASM decryption)
     try {
-      console.log(TAG + ' ⚡ Attempting fast backend extraction...');
+      console.log(TAG + ' 🔄 Starting direct client extraction...');
+      var directResult = await extractDirect(id, isTvShow, season, episode);
+      if (directResult && directResult.url) {
+        var dirWithDub = await attachAmharicAudioTrack(directResult, tmdbId, isTvShow, season, episode, title);
+        if (dirWithDub && dirWithDub.url) {
+          console.log(TAG + ' 🚀 Direct client extraction succeeded');
+          return dirWithDub;
+        }
+        console.warn(TAG + ' ⚠️ Direct stream rejected by health check');
+      }
+    } catch (directErr) {
+      console.warn(TAG + ' ⚠️ Direct extraction failed: ' + (directErr.message || directErr));
+    }
+
+    // 2. Fast backend fallback
+    try {
+      console.log(TAG + ' ⚡ Attempting backend extraction fallback...');
       var fastResult = await extractViaBackend(tmdbId, imdbId, isTvShow, season, episode);
       if (fastResult && fastResult.url) {
         var fastWithDub = await attachAmharicAudioTrack(fastResult, tmdbId, isTvShow, season, episode, title);
         if (fastWithDub && fastWithDub.url) {
-          console.log(TAG + ' 🚀 Fast backend extraction succeeded in ~1s');
+          console.log(TAG + ' 🚀 Backend extraction fallback succeeded');
           return fastWithDub;
         }
-        console.warn(TAG + ' ⚠️ Fast backend stream rejected by health check, falling back to direct extraction...');
       }
     } catch (fastErr) {
-      console.warn(TAG + ' ⚠️ Fast backend extraction failed: ' + (fastErr.message || fastErr));
-    }
-
-    // 2. FALLBACK: Direct WebAssembly extraction (V8 / Node.js / Android TV / Web)
-    if (typeof WebAssembly !== 'undefined') {
-      try {
-        console.log(TAG + ' 🔄 Falling back to client-side direct WASM extraction...');
-        var directResult = await extractDirect(id, isTvShow, season, episode);
-        if (directResult && directResult.url) {
-          var dirWithDub = await attachAmharicAudioTrack(directResult, tmdbId, isTvShow, season, episode, title);
-          if (dirWithDub && dirWithDub.url) {
-            return dirWithDub;
-          }
-          console.warn(TAG + ' ⚠️ Direct stream rejected by health check');
-        }
-      } catch (directErr) {
-        console.warn(TAG + ' ⚠️ Direct extraction failed: ' + (directErr.message || directErr));
-      }
+      console.warn(TAG + ' ⚠️ Backend extraction fallback failed: ' + (fastErr.message || fastErr));
     }
 
     return null;

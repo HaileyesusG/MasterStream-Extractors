@@ -229,7 +229,7 @@
 
     console.log(TAG + ' 🚀 Extracting tmdbId=' + tmdbId + ' isTv=' + isTvShow + (isTvShow ? (' s=' + season + ' e=' + episode) : ''));
 
-    var defaultServers = ['Nebula', 'Lisbon', 'Light', 'Zenith', 'Comet'];
+    var defaultServers = ['Light', 'Lisbon', 'Nebula', 'Comet', 'Zenith'];
     var servers = defaultServers;
     try {
       var sController = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -247,7 +247,7 @@
         var sData = await sRes.json();
         if (Array.isArray(sData) && sData.length > 0) {
           var dynNames = sData.map(function (s) { return s.name; }).filter(Boolean);
-          var prioritized = ['Nebula', 'Lisbon', 'Light'];
+          var prioritized = ['Light', 'Lisbon', 'Nebula', 'Comet', 'Zenith'];
           var ordered = [];
           for (var pi = 0; pi < prioritized.length; pi++) {
             if (dynNames.indexOf(prioritized[pi]) !== -1) ordered.push(prioritized[pi]);

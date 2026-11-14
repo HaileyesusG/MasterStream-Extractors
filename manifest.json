@@ -1,5 +1,5 @@
 {
-    "version":  383,
+    "version":  384,
     "providerPriority":  [
                              "LordFlix",
                              "CineJoy",
@@ -38,7 +38,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "26C8D172296EE7A650988D1C258741FE",
+                                      "hash":  "91709A1D201E1E80677F3CCD1DDB2E91",
                                       "referer":  "https://cinejoy.pk/",
                                       "origin":  "https://cinejoy.pk",
                                       "nativeMode":  false,

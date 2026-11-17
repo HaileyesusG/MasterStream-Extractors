@@ -582,6 +582,7 @@
       headers: streamHeaders,
       subtitles: subtitles,
       qualities: qualities,
+      isPlayableVerified: true,
     };
   }
 
@@ -781,9 +782,10 @@
   
   async function isStreamPlayable(url, headers) {
     if (!url) return false;
+    var timeoutId = null;
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 5000) : null;
+      timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 8000) : null;
       var reqHeaders = Object.assign({}, headers || {});
 
       // Step 1: Probe master URL (fetch without Range to read the playlist structure)
@@ -797,7 +799,7 @@
         return false;
       }
 
-      var contentType = (res.headers.get('content-type') || '').toLowerCase();
+      var contentType = (res.headers && typeof res.headers.get === 'function' ? (res.headers.get('content-type') || '') : '').toLowerCase();
       var initialText = await res.text();
 
       // Check if HTML / Cloudflare error page was returned
@@ -808,7 +810,7 @@
       }
 
       // Step 2: HLS Playlist deep validation
-      var isHls = url.indexOf('.m3u8') > -1 || initialText.indexOf('#EXTM3U') > -1 || contentType.indexOf('mpegurl') > -1 || url.indexOf('/pl/') > -1;
+      var isHls = url.indexOf('.m3u8') > -1 || initialText.indexOf('#EXTM3U') > -1 || contentType.indexOf('mpegurl') > -1 || url.indexOf('/pl/') > -1 || url.indexOf('/pli/') > -1;
       if (isHls) {
         if (initialText.indexOf('#EXTM3U') === -1) {
           if (timeoutId) clearTimeout(timeoutId);
@@ -842,7 +844,7 @@
             return false;
           }
 
-          var subType = (subRes.headers.get('content-type') || '').toLowerCase();
+          var subType = (subRes.headers && typeof subRes.headers.get === 'function' ? (subRes.headers.get('content-type') || '') : '').toLowerCase();
           var subText = await subRes.text();
           if (subType.indexOf('text/html') > -1 || subText.indexOf('<html') > -1 || subText.indexOf('#EXTM3U') === -1) {
             if (timeoutId) clearTimeout(timeoutId);
@@ -864,27 +866,38 @@
           candidateUrl = subLines[0].indexOf('http') === 0 ? subLines[0] : new URL(subLines[0], candidateUrl).href;
         }
 
-        // Step 3: Probe the actual media segment with Range: bytes=0-10
-        var segHeaders = Object.assign({}, reqHeaders, { 'Range': 'bytes=0-10' });
-        var segRes = await fetch(candidateUrl, {
-          method: 'GET',
-          headers: segHeaders,
-          signal: controller ? controller.signal : undefined
-        });
+        // Step 3: Optional probe of the first media segment to detect Cloudflare/HTML blocks
+        try {
+          var segHeaders = Object.assign({}, reqHeaders, { 'Range': 'bytes=0-10' });
+          var segRes = await fetch(candidateUrl, {
+            method: 'GET',
+            headers: segHeaders,
+            signal: controller ? controller.signal : undefined
+          });
+
+          if (segRes && (segRes.status === 200 || segRes.status === 206)) {
+            if (typeof segRes.arrayBuffer === 'function') {
+              var segBuf = new Uint8Array(await segRes.arrayBuffer());
+              if (segBuf.length > 0 && segBuf[0] === 0x3c) { // '<' indicates HTML error
+                if (timeoutId) clearTimeout(timeoutId);
+                console.warn(TAG + ' ❌ Media segment returned HTML error page — rejecting false positive');
+                return false;
+              }
+            } else if (typeof segRes.text === 'function') {
+              var segText = await segRes.text();
+              if (segText.indexOf('<html') > -1 || segText.indexOf('<!DOCTYPE') > -1) {
+                if (timeoutId) clearTimeout(timeoutId);
+                console.warn(TAG + ' ❌ Media segment returned HTML error page — rejecting false positive');
+                return false;
+              }
+            }
+          }
+        } catch (segErr) {
+          // If bridge does not support Range/arrayBuffer, the variant playlist is already validated
+          console.log(TAG + ' ℹ️ Segment byte probe skipped: ' + (segErr.message || segErr));
+        }
+
         if (timeoutId) clearTimeout(timeoutId);
-
-        if (!segRes || (segRes.status !== 200 && segRes.status !== 206)) {
-          console.warn(TAG + ' ❌ Media segment check failed (HTTP ' + (segRes ? segRes.status : 'null') + ') — rejecting false positive');
-          return false;
-        }
-
-        var segBuf = new Uint8Array(await segRes.arrayBuffer());
-        // Check for HTML error pages (e.g. <!DOCTYPE html> or <html> Cloudflare block)
-        if (segBuf.length > 0 && segBuf[0] === 0x3c) {
-          console.warn(TAG + ' ❌ Media segment returned HTML error page — rejecting false positive');
-          return false;
-        }
-
         return true;
       } else {
         if (timeoutId) clearTimeout(timeoutId);
@@ -892,6 +905,8 @@
         return true;
       }
     } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
+      console.warn(TAG + ' ⚠️ Health check error: ' + (e.message || e));
       return false;
     }
   }
@@ -900,10 +915,13 @@
     if (!result || !result.url) return null;
 
     // Validate that the primary stream is actually playable before returning success or attaching any dub!
-    var isPlayable = await isStreamPlayable(result.url, result.headers);
-    if (!isPlayable) {
-      console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
-      return null;
+    if (!result.isPlayableVerified) {
+      var isPlayable = await isStreamPlayable(result.url, result.headers);
+      if (!isPlayable) {
+        console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
+        return null;
+      }
+      result.isPlayableVerified = true;
     }
 
     try {

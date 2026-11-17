@@ -1,5 +1,5 @@
 {
-    "version":  388,
+    "version":  389,
     "providerPriority":  [
                              "LordFlix",
                              "VixSrc",
@@ -115,6 +115,15 @@
                                                           "movie",
                                                           "tv"
                                                       ]
-                                   }
+                                   },
+                      "VidlinkSniffer":  {
+                                             "file":  "extractors/VidlinkSnifferExtractor.js",
+                                             "hash":  "809A47FC480FF90FCA0EB36390493F7A",
+                                             "nativeMode":  false,
+                                             "mediaTypes":  [
+                                                                "movie",
+                                                                "tv"
+                                                            ]
+                                         }
                   }
 }

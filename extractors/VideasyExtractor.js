@@ -74,16 +74,21 @@
             try {
               controller.abort();
             } catch (e) {}
-          }, 4000)
+          }, 5000)
         : null;
-      var reqHeaders = Object.assign({}, headers || {}, { Range: 'bytes=0-10' });
+      var reqHeaders = Object.assign({}, headers || {});
       var res = await fetch(url, {
         method: 'GET',
         headers: reqHeaders,
         signal: controller ? controller.signal : undefined,
       });
       if (timeoutId) clearTimeout(timeoutId);
-      return res.status >= 200 && res.status < 400;
+      if (!res || !res.ok) return false;
+      var text = await res.text();
+      if (text.indexOf('<html') > -1 || text.indexOf('<!DOCTYPE') > -1) {
+        return false;
+      }
+      return text.indexOf('#EXTM3U') > -1 || (res.status >= 200 && res.status < 400);
     } catch (e) {
       return false;
     }
@@ -92,10 +97,13 @@
   async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
     if (!result || !result.url) return null;
 
-    var isPlayable = await isStreamPlayable(result.url, result.headers);
-    if (!isPlayable) {
-      console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
-      return null;
+    if (!result.isPlayableVerified) {
+      var isPlayable = await isStreamPlayable(result.url, result.headers);
+      if (!isPlayable) {
+        console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
+        return null;
+      }
+      result.isPlayableVerified = true;
     }
 
     try {
@@ -151,19 +159,28 @@
     return result;
   }
 
+  var B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
   function base64UrlEncode(bytes) {
-    var b64 = '';
     if (typeof Buffer !== 'undefined') {
-      b64 = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
-    } else {
-      var bin = '';
-      var len = bytes.byteLength;
-      for (var i = 0; i < len; i++) {
-        bin += String.fromCharCode(bytes[i]);
-      }
-      b64 = typeof btoa === 'function' ? btoa(bin) : '';
+      return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
     }
-    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    var len = bytes.length;
+    var base64 = '';
+    for (var i = 0; i < len; i += 3) {
+      var b0 = bytes[i];
+      var b1 = i + 1 < len ? bytes[i + 1] : 0;
+      var b2 = i + 2 < len ? bytes[i + 2] : 0;
+      base64 += B64_CHARS.charAt(b0 >> 2);
+      base64 += B64_CHARS.charAt(((b0 & 3) << 4) | (b1 >> 4));
+      base64 += i + 1 < len ? B64_CHARS.charAt(((b1 & 15) << 2) | (b2 >> 6)) : '';
+      base64 += i + 2 < len ? B64_CHARS.charAt(b2 & 63) : '';
+    }
+    return base64.replace(/\+/g, '-').replace(/\//g, '_');
   }
 
   function base64UrlDecodeToUint8(str) {
@@ -173,20 +190,46 @@
       var buf = Buffer.from(b64, 'base64');
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.length);
     }
-    var bin = typeof atob === 'function' ? atob(b64) : '';
-    var bytes = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) {
-      bytes[i] = bin.charCodeAt(i);
+    if (typeof atob === 'function') {
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) {
+        bytes[i] = bin.charCodeAt(i);
+      }
+      return bytes;
     }
-    return bytes;
+    var b64Lookup = new Uint8Array(256);
+    for (var j = 0; j < B64_CHARS.length; j++) b64Lookup[B64_CHARS.charCodeAt(j)] = j;
+    var rawLen = (b64.length * 3) / 4 - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+    var out = new Uint8Array(rawLen);
+    var p = 0;
+    for (var k = 0; k < b64.length; k += 4) {
+      var c0 = b64Lookup[b64.charCodeAt(k)];
+      var c1 = b64Lookup[b64.charCodeAt(k + 1)];
+      var c2 = b64Lookup[b64.charCodeAt(k + 2)];
+      var c3 = b64Lookup[b64.charCodeAt(k + 3)];
+      out[p++] = (c0 << 2) | (c1 >> 4);
+      if (p < rawLen) out[p++] = ((c1 & 15) << 4) | (c2 >> 2);
+      if (p < rawLen) out[p++] = ((c2 & 3) << 6) | c3;
+    }
+    return out;
   }
 
   /**
-   * Post binary data reliably across React Native (Hermes/JSC) and Node.js.
-   * In React Native, fetch() cannot serialize raw Uint8Array/ArrayBuffer bodies,
-   * so XMLHttpRequest with responseType='arraybuffer' is required.
+   * Post binary data reliably across React Native (Hermes/JSC), Android TV (WebView), and Node.js.
+   * Sends ArrayBuffer with explicit 'Content-Type': 'application/octet-stream' so React Native's
+   * native NetworkingModule converts it to base64 byte payload instead of throwing
+   * "Payload is set but no content-type header specified" or failing on broken user-space Blobs.
    */
   function postBinary(url, headers, uint8Array, timeoutMs) {
+    var reqHeaders = Object.assign(
+      {
+        'Content-Type': 'application/octet-stream',
+        Accept: '*/*',
+      },
+      headers || {}
+    );
+
     if (typeof XMLHttpRequest !== 'undefined') {
       return new Promise(function (resolve, reject) {
         try {
@@ -194,12 +237,10 @@
           xhr.open('POST', url, true);
           xhr.responseType = 'arraybuffer';
           xhr.timeout = timeoutMs || 8000;
-          if (headers) {
-            for (var k in headers) {
-              try {
-                xhr.setRequestHeader(k, headers[k]);
-              } catch (e) {}
-            }
+          for (var k in reqHeaders) {
+            try {
+              xhr.setRequestHeader(k, reqHeaders[k]);
+            } catch (e) {}
           }
           xhr.onload = function () {
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -219,16 +260,8 @@
             reject(new Error('XHR request timeout'));
           };
 
-          var bodyToSend = uint8Array;
-          if (typeof Blob !== 'undefined') {
-            try {
-              bodyToSend = new Blob([uint8Array.buffer ? uint8Array : uint8Array.buffer]);
-            } catch (_) {
-              bodyToSend = uint8Array.buffer || uint8Array;
-            }
-          } else if (uint8Array.buffer) {
-            bodyToSend = uint8Array.buffer;
-          }
+          // Pass ArrayBuffer directly. Never wrap in new Blob(), which is not supported by React Native's native BlobStore
+          var bodyToSend = (uint8Array && uint8Array.buffer) ? uint8Array.buffer : uint8Array;
           xhr.send(bodyToSend);
         } catch (err) {
           reject(err);
@@ -243,7 +276,7 @@
     }
     return fetch(url, {
       method: 'POST',
-      headers: headers,
+      headers: reqHeaders,
       body: nodeBody,
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -550,6 +583,7 @@
           headers: streamHeaders,
           subtitles: subtitles,
           qualities: qualities,
+          isPlayableVerified: true,
         };
 
         var finalRes = await attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title);

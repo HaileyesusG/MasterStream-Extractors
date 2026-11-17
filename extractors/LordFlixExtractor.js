@@ -20,7 +20,7 @@
   var TAG = '[LordFlixExtractor]';
   var VIDSRC_BASE = 'https://vidsrc.sh';
   var USER_AGENT =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
   // Backend proxy fallback for environments without WebAssembly
   var BACKEND_URL = 'https://backendmasterstream.onrender.com/api/cinejoy/vidsrcme';
@@ -524,6 +524,11 @@
       return null;
     }
 
+    // Use /pli/ native playback route (playlists with pre-stamped segment tokens)
+    streamUrls = streamUrls.map(function (u) {
+      return typeof u === 'string' ? u.replace('/pl/', '/pli/') : u;
+    });
+
     // 7. Mint stream token for playback
     var effectiveReferer = landingOrigin ? (landingOrigin + '/') : (playerUrl || (VIDSRC_BASE + '/'));
     var effectiveOrigin = landingOrigin || (effectiveReferer ? new URL(effectiveReferer).origin : VIDSRC_BASE);
@@ -873,9 +878,10 @@
           return false;
         }
 
-        var segType = (segRes.headers.get('content-type') || '').toLowerCase();
-        if (segType.indexOf('text/html') > -1) {
-          console.warn(TAG + ' ❌ Media segment returned text/html instead of video — rejecting false positive');
+        var segBuf = new Uint8Array(await segRes.arrayBuffer());
+        // Check for HTML error pages (e.g. <!DOCTYPE html> or <html> Cloudflare block)
+        if (segBuf.length > 0 && segBuf[0] === 0x3c) {
+          console.warn(TAG + ' ❌ Media segment returned HTML error page — rejecting false positive');
           return false;
         }
 

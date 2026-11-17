@@ -1,5 +1,5 @@
 {
-    "version":  387,
+    "version":  388,
     "providerPriority":  [
                              "CineJoy",
                              "VixSrc",
@@ -38,7 +38,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "91709A1D201E1E80677F3CCD1DDB2E91",
+                                      "hash":  "157D2D508D2BC9790CA7A478B95A4DFE",
                                       "referer":  "https://cinejoy.pk/",
                                       "origin":  "https://cinejoy.pk",
                                       "nativeMode":  false,

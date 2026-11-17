@@ -1,5 +1,5 @@
 /**
- * Videasy / CineJoy v2 Extractor
+ * Videasy / CineJoy Extractor
  * Powered by api.wing.st / CineJoy API
  *
  * Remote hot-update CommonJS module for Android TV and React Native Mobile.
@@ -12,6 +12,10 @@
   var TAG = '[VideasyExtractor]';
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+  var TMDB_KEY = 'a2dc7e427ce7dc4a54a518f239a51909';
+
+  // In-memory cache for media metadata (title, year, imdbId)
+  var metaCache = {};
 
   // Catalog of Amharic dubbed movies and TV series
   var AMHARIC_CATALOG = {
@@ -177,6 +181,113 @@
     return bytes;
   }
 
+  /**
+   * Post binary data reliably across React Native (Hermes/JSC) and Node.js.
+   * In React Native, fetch() cannot serialize raw Uint8Array/ArrayBuffer bodies,
+   * so XMLHttpRequest with responseType='arraybuffer' is required.
+   */
+  function postBinary(url, headers, uint8Array, timeoutMs) {
+    if (typeof XMLHttpRequest !== 'undefined') {
+      return new Promise(function (resolve, reject) {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', url, true);
+          xhr.responseType = 'arraybuffer';
+          xhr.timeout = timeoutMs || 8000;
+          if (headers) {
+            for (var k in headers) {
+              try {
+                xhr.setRequestHeader(k, headers[k]);
+              } catch (e) {}
+            }
+          }
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              if (xhr.response) {
+                resolve(new Uint8Array(xhr.response));
+              } else {
+                reject(new Error('Empty response from ' + url));
+              }
+            } else {
+              reject(new Error('HTTP status ' + xhr.status));
+            }
+          };
+          xhr.onerror = function () {
+            reject(new Error('XHR Network request failed'));
+          };
+          xhr.ontimeout = function () {
+            reject(new Error('XHR request timeout'));
+          };
+
+          var bodyToSend = uint8Array;
+          if (typeof Blob !== 'undefined') {
+            try {
+              bodyToSend = new Blob([uint8Array.buffer ? uint8Array : uint8Array.buffer]);
+            } catch (_) {
+              bodyToSend = uint8Array.buffer || uint8Array;
+            }
+          } else if (uint8Array.buffer) {
+            bodyToSend = uint8Array.buffer;
+          }
+          xhr.send(bodyToSend);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    // Node.js fallback
+    var nodeBody = uint8Array;
+    if (typeof Buffer !== 'undefined' && !(uint8Array instanceof Buffer)) {
+      nodeBody = Buffer.from(uint8Array.buffer, uint8Array.byteOffset, uint8Array.byteLength);
+    }
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: nodeBody,
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.arrayBuffer();
+    }).then(function (buf) {
+      return new Uint8Array(buf);
+    });
+  }
+
+  /**
+   * Resolve movie or TV title, release year, and IMDB ID from TMDB.
+   * Essential when mobile apps invoke extract(tmdbId, isTv, season, episode)
+   * where title/year are omitted.
+   */
+  async function resolveMediaMeta(tmdbId, isTvShow) {
+    if (!tmdbId) return { title: '', year: '', imdbId: '' };
+    var key = (isTvShow ? 'tv_' : 'm_') + tmdbId;
+    if (metaCache[key]) return metaCache[key];
+
+    try {
+      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3500) : null;
+      var endpoint = isTvShow ? 'tv/' + tmdbId : 'movie/' + tmdbId;
+      var res = await fetch('https://api.themoviedb.org/3/' + endpoint + '?api_key=' + TMDB_KEY, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: controller ? controller.signal : undefined,
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (res && res.ok) {
+        var data = await res.json();
+        var title = data.name || data.title || data.original_name || data.original_title || '';
+        var year = (data.first_air_date || data.release_date || '').slice(0, 4);
+        var imdbId = data.imdb_id || '';
+
+        var meta = { title: title, year: year, imdbId: imdbId };
+        metaCache[key] = meta;
+        return meta;
+      }
+    } catch (e) {}
+
+    return { title: '', year: '', imdbId: '' };
+  }
+
   function parseM3u8Qualities(m3u8Text, masterUrl) {
     var qualities = [{ quality: 'Auto', url: masterUrl }];
     if (!m3u8Text) return qualities;
@@ -227,13 +338,30 @@
       return null;
     }
 
-    console.log(TAG + ' 🚀 Extracting tmdbId=' + tmdbId + ' isTv=' + isTvShow + (isTvShow ? (' s=' + season + ' e=' + episode) : ''));
+    // Auto-resolve missing title / year / imdbId from TMDB
+    if (!title || !year || !imdbId) {
+      var meta = await resolveMediaMeta(tmdbId, isTvShow);
+      if (!title && meta.title) title = meta.title;
+      if (!year && meta.year) year = meta.year;
+      if (!imdbId && meta.imdbId) imdbId = meta.imdbId;
+    }
+
+    console.log(
+      TAG +
+        ' 🚀 Extracting "' +
+        (title || tmdbId) +
+        '" (' +
+        (year || '?') +
+        ') isTv=' +
+        isTvShow +
+        (isTvShow ? ' s=' + season + ' e=' + episode : '')
+    );
 
     var defaultServers = ['Light', 'Lisbon', 'Nebula', 'Comet', 'Zenith'];
     var servers = defaultServers;
     try {
       var sController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var sTimeout = sController ? setTimeout(function () { sController.abort(); }, 2000) : null;
+      var sTimeout = sController ? setTimeout(function () { sController.abort(); }, 2500) : null;
       var sRes = await fetch('https://api.wing.st/servers', {
         headers: {
           Origin: 'https://cinejoy.pk',
@@ -245,8 +373,9 @@
       if (sTimeout) clearTimeout(sTimeout);
       if (sRes && sRes.ok) {
         var sData = await sRes.json();
-        if (Array.isArray(sData) && sData.length > 0) {
-          var dynNames = sData.map(function (s) { return s.name; }).filter(Boolean);
+        var sList = Array.isArray(sData) ? sData : (sData && Array.isArray(sData.servers) ? sData.servers : []);
+        if (sList.length > 0) {
+          var dynNames = sList.map(function (s) { return s.name; }).filter(Boolean);
           var prioritized = ['Light', 'Lisbon', 'Nebula', 'Comet', 'Zenith'];
           var ordered = [];
           for (var pi = 0; pi < prioritized.length; pi++) {
@@ -281,6 +410,7 @@
           targetUrl += '&season=' + (season || 1) + '&episode=' + (episode || 1);
         }
 
+        // Step 1: Encrypt request payload via enc-dec.app
         var encController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var encTimeout = encController ? setTimeout(function () { encController.abort(); }, 5000) : null;
         var encRes = await fetch(
@@ -293,30 +423,38 @@
         if (encTimeout) clearTimeout(encTimeout);
         if (!encRes.ok) continue;
 
-        var encData = await encRes.json();
+        var encText = await encRes.text();
+        var encData = null;
+        try {
+          encData = JSON.parse(encText);
+        } catch (_) {
+          continue;
+        }
         if (!encData || !encData.result || !encData.result.data || !encData.result.state) continue;
 
+        // Step 2: Post binary data to api.wing.st/g via XHR / Node postBinary
         var postBody = base64UrlDecodeToUint8(encData.result.data);
-        var gController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var gTimeout = gController ? setTimeout(function () { gController.abort(); }, 6000) : null;
-        var gRes = await fetch('https://api.wing.st/g', {
-          method: 'POST',
-          headers: {
-            Origin: 'https://cinejoy.pk',
-            Referer: 'https://cinejoy.pk/',
-            'User-Agent': USER_AGENT,
-          },
-          body: postBody,
-          signal: gController ? gController.signal : undefined,
-        });
-        if (gTimeout) clearTimeout(gTimeout);
-        if (!gRes.ok) continue;
+        var gBytes = null;
+        try {
+          gBytes = await postBinary(
+            'https://api.wing.st/g',
+            {
+              Origin: 'https://cinejoy.pk',
+              Referer: 'https://cinejoy.pk/',
+              'User-Agent': USER_AGENT,
+            },
+            postBody,
+            7000
+          );
+        } catch (xhrErr) {
+          console.warn(TAG + ' ⚠️ Binary post to api.wing.st/g failed for [' + server + ']: ' + (xhrErr.message || xhrErr));
+          continue;
+        }
 
-        var gArrayBuf = await gRes.arrayBuffer();
-        var gBytes = new Uint8Array(gArrayBuf);
-        if (gBytes.length === 0) continue;
+        if (!gBytes || gBytes.length === 0) continue;
         var gBase64Url = base64UrlEncode(gBytes);
 
+        // Step 3: Decrypt response payload via enc-dec.app
         var decController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var decTimeout = decController ? setTimeout(function () { decController.abort(); }, 5000) : null;
         var decRes = await fetch('https://enc-dec.app/api/dec-cinejoy', {
@@ -334,7 +472,14 @@
         if (decTimeout) clearTimeout(decTimeout);
         if (!decRes.ok) continue;
 
-        var decData = await decRes.json();
+        var decText = await decRes.text();
+        var decData = null;
+        try {
+          decData = JSON.parse(decText);
+        } catch (_) {
+          continue;
+        }
+
         var streams = (decData && decData.result && decData.result.data && decData.result.data.stream) || [];
         var hlsStream = null;
         for (var sti = 0; sti < streams.length; sti++) {

@@ -543,6 +543,13 @@
 
     var finalUrl = primaryUrl + (primaryUrl.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(token);
 
+    // Deeply validate stream playability down to media segments before declaring success
+    var isPlayable = await isStreamPlayable(finalUrl, streamHeaders);
+    if (!isPlayable) {
+      console.warn(TAG + ' ❌ Direct stream health check failed (unplayable segments / 403 / dead) — rejecting false positive');
+      return null;
+    }
+
     // Subtitles
     var subtitles = [];
     if (Array.isArray(streamData.default_subs)) {
@@ -772,9 +779,9 @@
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 5000) : null;
-      var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
-      
-      // Step 1: Probe master URL
+      var reqHeaders = Object.assign({}, headers || {});
+
+      // Step 1: Probe master URL (fetch without Range to read the playlist structure)
       var res = await fetch(url, {
         method: 'GET',
         headers: reqHeaders,
@@ -785,27 +792,40 @@
         return false;
       }
 
-      // Step 2: For HLS (.m3u8), deeply validate actual media segments!
-      // Master playlist returning 200 is a common false positive when segments are blocked/403.
-      if (url.indexOf('.m3u8') > -1) {
-        var text = await res.text();
-        if (!text || text.indexOf('#EXTM3U') === -1) {
+      var contentType = (res.headers.get('content-type') || '').toLowerCase();
+      var initialText = await res.text();
+
+      // Check if HTML / Cloudflare error page was returned
+      if (contentType.indexOf('text/html') > -1 || initialText.indexOf('<html') > -1 || initialText.indexOf('<!DOCTYPE') > -1) {
+        if (timeoutId) clearTimeout(timeoutId);
+        console.warn(TAG + ' ❌ Stream rejected: HTML/Cloudflare response instead of media');
+        return false;
+      }
+
+      // Step 2: HLS Playlist deep validation
+      var isHls = url.indexOf('.m3u8') > -1 || initialText.indexOf('#EXTM3U') > -1 || contentType.indexOf('mpegurl') > -1 || url.indexOf('/pl/') > -1;
+      if (isHls) {
+        if (initialText.indexOf('#EXTM3U') === -1) {
           if (timeoutId) clearTimeout(timeoutId);
+          console.warn(TAG + ' ❌ Stream rejected: missing #EXTM3U header in playlist');
           return false;
         }
 
-        var lines = text.split('\n').map(function (l) { return l.trim(); }).filter(function (l) {
-          return l && l.indexOf('#') !== 0;
-        });
+        var lines = initialText
+          .split('\n')
+          .map(function (l) { return l.trim(); })
+          .filter(function (l) { return l && l.indexOf('#') !== 0; });
+
         if (lines.length === 0) {
           if (timeoutId) clearTimeout(timeoutId);
+          console.warn(TAG + ' ❌ Stream rejected: empty playlist');
           return false;
         }
 
         var candidateUrl = lines[0].indexOf('http') === 0 ? lines[0] : new URL(lines[0], url).href;
 
-        // If candidateUrl is another playlist (variant / quality stream), fetch it to get actual media segment
-        if (candidateUrl.indexOf('.m3u8') > -1 || text.indexOf('#EXT-X-STREAM-INF') > -1) {
+        // If master playlist with variant qualities (#EXT-X-STREAM-INF), fetch variant playlist
+        if (initialText.indexOf('#EXT-X-STREAM-INF') > -1 || candidateUrl.indexOf('.m3u8') > -1) {
           var subRes = await fetch(candidateUrl, {
             method: 'GET',
             headers: reqHeaders,
@@ -813,37 +833,58 @@
           });
           if (!subRes || !subRes.ok) {
             if (timeoutId) clearTimeout(timeoutId);
+            console.warn(TAG + ' ❌ Variant playlist check failed (HTTP ' + (subRes ? subRes.status : 'null') + ') — rejecting false positive');
             return false;
           }
+
+          var subType = (subRes.headers.get('content-type') || '').toLowerCase();
           var subText = await subRes.text();
-          var subLines = subText.split('\n').map(function (l) { return l.trim(); }).filter(function (l) {
-            return l && l.indexOf('#') !== 0;
-          });
+          if (subType.indexOf('text/html') > -1 || subText.indexOf('<html') > -1 || subText.indexOf('#EXTM3U') === -1) {
+            if (timeoutId) clearTimeout(timeoutId);
+            console.warn(TAG + ' ❌ Variant playlist returned HTML/invalid — rejecting false positive');
+            return false;
+          }
+
+          var subLines = subText
+            .split('\n')
+            .map(function (l) { return l.trim(); })
+            .filter(function (l) { return l && l.indexOf('#') !== 0; });
+
           if (subLines.length === 0) {
             if (timeoutId) clearTimeout(timeoutId);
+            console.warn(TAG + ' ❌ Variant playlist has no media segments');
             return false;
           }
+
           candidateUrl = subLines[0].indexOf('http') === 0 ? subLines[0] : new URL(subLines[0], candidateUrl).href;
         }
 
-        // Probe the actual media segment with reqHeaders (Referer & Origin forwarded by ExoPlayer)
+        // Step 3: Probe the actual media segment with Range: bytes=0-10
+        var segHeaders = Object.assign({}, reqHeaders, { 'Range': 'bytes=0-10' });
         var segRes = await fetch(candidateUrl, {
           method: 'GET',
-          headers: reqHeaders,
+          headers: segHeaders,
           signal: controller ? controller.signal : undefined
         });
         if (timeoutId) clearTimeout(timeoutId);
 
         if (!segRes || (segRes.status !== 200 && segRes.status !== 206)) {
-          console.warn(TAG + ' ❌ Segment health check failed (HTTP ' + (segRes ? segRes.status : 'null') + ') — rejecting false positive');
+          console.warn(TAG + ' ❌ Media segment check failed (HTTP ' + (segRes ? segRes.status : 'null') + ') — rejecting false positive');
           return false;
         }
+
+        var segType = (segRes.headers.get('content-type') || '').toLowerCase();
+        if (segType.indexOf('text/html') > -1) {
+          console.warn(TAG + ' ❌ Media segment returned text/html instead of video — rejecting false positive');
+          return false;
+        }
+
+        return true;
       } else {
         if (timeoutId) clearTimeout(timeoutId);
         if (res.status !== 200 && res.status !== 206) return false;
+        return true;
       }
-
-      return true;
     } catch (e) {
       return false;
     }

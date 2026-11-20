@@ -374,7 +374,25 @@
     // so each resolution quality variant plays with full synchronized audio!
     if (hasDemuxedAudio && audioLines.length > 0) {
       try {
-        var storePromises = rawVariants.map(function (v) {
+        // Build smooth Auto playlist (caps at 1080p to prevent 4K 17Mbps buffering)
+        var autoVariants = rawVariants.filter(function (v) {
+          var h = parseInt(v.quality, 10) || 0;
+          return h < 1200 && v.quality.indexOf('4K') === -1 && v.quality.indexOf('2160') === -1;
+        });
+        if (autoVariants.length === 0) autoVariants = rawVariants;
+
+        var autoMasterLines = [headerLines.join('\n'), '', audioLines.join('\n'), ''];
+        for (var a = 0; a < autoVariants.length; a++) {
+          autoMasterLines.push(autoVariants[a].infLine);
+          autoMasterLines.push(autoVariants[a].variantUrl);
+        }
+
+        var allItemsToStore = [
+          { quality: 'Auto', playlist: autoMasterLines.join('\n'), fallback: masterUrl }
+        ];
+
+        for (var vi = 0; vi < rawVariants.length; vi++) {
+          var v = rawVariants[vi];
           var miniMaster = [
             headerLines.join('\n'),
             '',
@@ -383,34 +401,29 @@
             v.infLine,
             v.variantUrl,
           ].join('\n');
+          allItemsToStore.push({ quality: v.quality, playlist: miniMaster, fallback: v.variantUrl });
+        }
 
+        var storePromises = allItemsToStore.map(function (item) {
           return fetch('https://backendmasterstream.onrender.com/api/cinejoy/playlist/store', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playlist: miniMaster }),
+            body: JSON.stringify({ playlist: item.playlist }),
           })
             .then(function (res) { return res.ok ? res.json() : null; })
             .then(function (data) {
               return {
-                quality: v.quality,
-                url: (data && data.url) ? data.url : v.variantUrl,
+                quality: item.quality,
+                url: (data && data.url) ? data.url : item.fallback,
               };
             })
             .catch(function () {
-              return { quality: v.quality, url: v.variantUrl };
+              return { quality: item.quality, url: item.fallback };
             });
         });
 
-        var resolvedVariants = await Promise.all(storePromises);
-        var seen = { 'Auto': true };
-        for (var r = 0; r < resolvedVariants.length; r++) {
-          var rv = resolvedVariants[r];
-          if (!seen[rv.quality]) {
-            seen[rv.quality] = true;
-            qualities.push(rv);
-          }
-        }
-        return qualities;
+        var resolved = await Promise.all(storePromises);
+        return resolved;
       } catch (storeErr) {
         // Fallback quietly if backend is unreachable
       }
@@ -660,8 +673,10 @@
             ')'
         );
 
+        var primaryUrl = (qualities && qualities.length > 0 && qualities[0].url) ? qualities[0].url : hlsStream.playlist;
+
         var result = {
-          url: hlsStream.playlist,
+          url: primaryUrl,
           quality: 'Auto',
           provider: 'Videasy',
           headers: streamHeaders,

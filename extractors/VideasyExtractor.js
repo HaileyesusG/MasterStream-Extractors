@@ -321,23 +321,119 @@
     return { title: '', year: '', imdbId: '' };
   }
 
-  function parseM3u8Qualities(m3u8Text, masterUrl) {
+  async function parseM3u8Qualities(m3u8Text, masterUrl) {
     var qualities = [{ quality: 'Auto', url: masterUrl }];
     if (!m3u8Text) return qualities;
+
     var lines = m3u8Text.split('\n');
+    var hasDemuxedAudio = m3u8Text.indexOf('#EXT-X-MEDIA:TYPE=AUDIO') !== -1;
+
+    var headerLines = [];
+    var audioLines = [];
+    var rawVariants = [];
+
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i].trim();
-      if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
+      if (
+        line.indexOf('#EXTM3U') === 0 ||
+        line.indexOf('#EXT-X-VERSION') === 0 ||
+        line.indexOf('#EXT-X-INDEPENDENT-SEGMENTS') === 0
+      ) {
+        headerLines.push(line);
+      } else if (line.indexOf('#EXT-X-MEDIA:TYPE=AUDIO') === 0) {
+        var absAudioLine = line.replace(/URI="([^"]+)"/, function (match, uri) {
+          try {
+            return 'URI="' + new URL(uri, masterUrl).href + '"';
+          } catch (e) {
+            return match;
+          }
+        });
+        audioLines.push(absAudioLine);
+      } else if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
         var resMatch = line.match(/RESOLUTION=\d+x(\d+)/i);
         var nameMatch = line.match(/NAME="([^"]+)"/i);
-        var qualityName = (nameMatch && nameMatch[1]) || (resMatch ? resMatch[1] + 'p' : null);
+        var widthMatch = line.match(/RESOLUTION=(\d+)x\d+/i);
+        var height = resMatch ? parseInt(resMatch[1], 10) : 0;
+        var width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
+
+        var qualityName = 'Auto';
+        if (width >= 3800 || height >= 2100) qualityName = '4K';
+        else if (width >= 2500 || height >= 1400) qualityName = '1440p';
+        else if (width >= 1900 || height >= 1000) qualityName = '1080p';
+        else if (width >= 1200 || height >= 700) qualityName = '720p';
+        else if (width >= 800 || height >= 450) qualityName = '480p';
+        else if (width >= 600 || height >= 300) qualityName = '360p';
+        else if (nameMatch && nameMatch[1]) qualityName = nameMatch[1];
+        else if (height > 0) qualityName = height + 'p';
+
         var nextLine = (lines[i + 1] || '').trim();
         if (qualityName && nextLine && nextLine.indexOf('#') !== 0) {
           try {
             var variantUrl = new URL(nextLine, masterUrl).toString();
-            qualities.push({ quality: qualityName, url: variantUrl });
+            rawVariants.push({
+              quality: qualityName,
+              infLine: line,
+              variantUrl: variantUrl,
+            });
           } catch (e) {}
         }
+      }
+    }
+
+    if (rawVariants.length === 0) return qualities;
+
+    // If HLS has separate demuxed audio tracks, synthesize mini-master playlists
+    // so each resolution quality variant plays with full synchronized audio!
+    if (hasDemuxedAudio && audioLines.length > 0) {
+      try {
+        var storePromises = rawVariants.map(function (v) {
+          var miniMaster = [
+            headerLines.join('\n'),
+            '',
+            audioLines.join('\n'),
+            '',
+            v.infLine,
+            v.variantUrl,
+          ].join('\n');
+
+          return fetch('https://backendmasterstream.onrender.com/api/cinejoy/playlist/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlist: miniMaster }),
+          })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (data) {
+              return {
+                quality: v.quality,
+                url: (data && data.url) ? data.url : v.variantUrl,
+              };
+            })
+            .catch(function () {
+              return { quality: v.quality, url: v.variantUrl };
+            });
+        });
+
+        var resolvedVariants = await Promise.all(storePromises);
+        var seen = { 'Auto': true };
+        for (var r = 0; r < resolvedVariants.length; r++) {
+          var rv = resolvedVariants[r];
+          if (!seen[rv.quality]) {
+            seen[rv.quality] = true;
+            qualities.push(rv);
+          }
+        }
+        return qualities;
+      } catch (storeErr) {
+        // Fallback quietly if backend is unreachable
+      }
+    }
+
+    // Fallback for non-demuxed HLS or if store failed
+    var seenFallback = { 'Auto': true };
+    for (var k = 0; k < rawVariants.length; k++) {
+      if (!seenFallback[rawVariants[k].quality]) {
+        seenFallback[rawVariants[k].quality] = true;
+        qualities.push({ quality: rawVariants[k].quality, url: rawVariants[k].variantUrl });
       }
     }
     return qualities;
@@ -556,7 +652,7 @@
           });
           if (m3u8Res.ok) {
             var m3u8Text = await m3u8Res.text();
-            var parsed = parseM3u8Qualities(m3u8Text, hlsStream.playlist);
+            var parsed = await parseM3u8Qualities(m3u8Text, hlsStream.playlist);
             if (parsed.length > 1) {
               qualities = parsed;
             }

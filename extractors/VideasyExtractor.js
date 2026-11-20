@@ -352,19 +352,7 @@
       } else if (line.indexOf('#EXT-X-STREAM-INF') === 0) {
         var resMatch = line.match(/RESOLUTION=\d+x(\d+)/i);
         var nameMatch = line.match(/NAME="([^"]+)"/i);
-        var widthMatch = line.match(/RESOLUTION=(\d+)x\d+/i);
-        var height = resMatch ? parseInt(resMatch[1], 10) : 0;
-        var width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
-
-        var qualityName = 'Auto';
-        if (width >= 3800 || height >= 2100) qualityName = '4K';
-        else if (width >= 2500 || height >= 1400) qualityName = '1440p';
-        else if (width >= 1900 || height >= 1000) qualityName = '1080p';
-        else if (width >= 1200 || height >= 700) qualityName = '720p';
-        else if (width >= 800 || height >= 450) qualityName = '480p';
-        else if (width >= 600 || height >= 300) qualityName = '360p';
-        else if (nameMatch && nameMatch[1]) qualityName = nameMatch[1];
-        else if (height > 0) qualityName = height + 'p';
+        var qualityName = (nameMatch && nameMatch[1]) || (resMatch ? resMatch[1] + 'p' : null);
 
         var nextLine = (lines[i + 1] || '').trim();
         if (qualityName && nextLine && nextLine.indexOf('#') !== 0) {

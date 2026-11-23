@@ -342,41 +342,36 @@
   /**
    * Decodes all data-sN attributes in an episode page and returns
    * iframe src URLs in priority order:
-   *   kitraskimisi (direct m3u8) → vidmoly (direct m3u8) → engifuosi (packed) → rest
+   *   Server 3 (data-s3) → Server 2 (data-s2) → Server 1 (data-s1) → rest
+   *
+   * Server 3 is prioritized first because Server 1 & Server 2 are under heavy load.
    */
   function decodePagePlayers(episodeHtml) {
-    var regex = /data-s\d+="([^"]+)"/g;
+    var regex = /data-s(\d+)="([^"]+)"/g;
     var m;
-    var kitra = [];
-    var vidmoly = [];
-    var engifuosi = [];
+    var server3 = [];
+    var server2 = [];
+    var server1 = [];
     var others = [];
 
     while ((m = regex.exec(episodeHtml)) !== null) {
-      var decoded = decodePlayerData(m[1]);
+      var sNum = m[1];
+      var decoded = decodePlayerData(m[2]);
       var src = extractIframeSrc(decoded);
       if (!src || src === '#' || src === 'about:blank') continue;
-      var host = getHost(src);
-      if (host.indexOf('kitra') !== -1) {
-        kitra.push(src);
-      } else if (host.indexOf('vidmoly') !== -1) {
-        vidmoly.push(src);
-      } else if (host.indexOf('engifuosi') !== -1 || host.indexOf('filemoon') !== -1) {
-        engifuosi.push(src);
+      if (sNum === '3') {
+        server3.push(src);
+      } else if (sNum === '2') {
+        server2.push(src);
+      } else if (sNum === '1') {
+        server1.push(src);
       } else {
         others.push(src);
       }
     }
 
-    // Priority: engifuosi (server 2) → kitraskimisi (server 1) → vidmoly → rest
-    //
-    // Why engifuosi first?
-    //   - engifuosi.com (5775755774.com CDN): packed JS, but m3u8 returns HTTP 200 ✅
-    //     This is what yoturkish.to calls "Server 2" — most reliable for all content.
-    //   - kitraskimisi.com (cfglobalcdn.com): direct m3u8 in page source, BUT the CDN
-    //     frequently times out on mobile/TV connections → validation fails ❌
-    //   - vidmoly: short-lived tokens, Referer required → usually rejected ❌
-    return engifuosi.concat(kitra, vidmoly, others);
+    // Priority: Server 3 (highest priority) → Server 2 → Server 1 → others
+    return server3.concat(server2, server1, others);
   }
 
   // ─── AMHARIC CATALOG (Dynamic + Static Fallback) ───────────────────────────
@@ -797,6 +792,13 @@ async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode
             'Origin': (streamData.referer || '').replace(/\/$/, ''),
           };
 
+          // Fast playability check before doing heavy playlist processing
+          var isPlayable = await isStreamPlayable(streamData.url, streamHeaders);
+          if (!isPlayable) {
+            console.warn(TAG + ' ⚠️ Player [' + (i + 1) + '/' + iframeSrcs.length + '] unplayable/dead, trying next player...');
+            continue;
+          }
+
           var processed = await processMasterPlaylist(streamData.url, streamHeaders);
 
           var finalResult = {
@@ -811,7 +813,7 @@ async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode
           if (ccFinal && ccFinal.url) {
             return ccFinal;
           }
-          console.warn(TAG + ' ⚠️ VidSrcCC player ' + (pIdx + 1) + ' rejected by health check, trying next player...');
+          console.warn(TAG + ' ⚠️ VidSrcCC player ' + (i + 1) + ' rejected by health check, trying next player...');
         }
       }
 

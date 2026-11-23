@@ -1,5 +1,5 @@
 {
-    "version":  401,
+    "version":  402,
     "providerPriority":  [
                              "LordFlix",
                              "Videasy",
@@ -36,7 +36,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "13ABCB6A63EEE1E848C0C1CA0ACD879D",
+                                      "hash":  "207E6EB5A0AAC389D424FF0FAF118C0B",
                                       "referer":  "https://cinejoy.pk/",
                                       "origin":  "https://cinejoy.pk",
                                       "nativeMode":  false,
@@ -74,7 +74,7 @@
                                  },
                       "VidSrcCC":  {
                                        "file":  "extractors/VidSrcCCExtractor.js",
-                                       "hash":  "521EAADEDA794B87670A6079AED52E82",
+                                       "hash":  "640E145681D5C053A3E2735AAFD4B20E",
                                        "nativeMode":  false,
                                        "mediaTypes":  [
                                                           "movie",

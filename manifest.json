@@ -1,5 +1,5 @@
 {
-    "version":  403,
+    "version":  404,
     "providerPriority":  [
                              "LordFlix",
                              "Videasy",
@@ -65,7 +65,7 @@
                                   },
                       "VixSrc":  {
                                      "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "9F126702DBF781FE6B99B3EB7469C469",
+                                     "hash":  "0DE323005A18FD0E491554F089527C90",
                                      "nativeMode":  false,
                                      "mediaTypes":  [
                                                         "movie",

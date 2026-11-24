@@ -1,5 +1,5 @@
 {
-    "version":  402,
+    "version":  403,
     "providerPriority":  [
                              "LordFlix",
                              "Videasy",
@@ -17,7 +17,7 @@
     "providers":  {
                       "CineJoy":  {
                                       "file":  "extractors/CineJoyExtractor.js",
-                                      "hash":  "1E24A1175671D25058EC868F3275872E",
+                                      "hash":  "5320F171552ED5EA7BDD738EB86B363B",
                                       "webBaseUrl":  "https://vidly.pro/",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
@@ -36,7 +36,7 @@
                                    },
                       "Videasy":  {
                                       "file":  "extractors/VideasyExtractor.js",
-                                      "hash":  "207E6EB5A0AAC389D424FF0FAF118C0B",
+                                      "hash":  "84751D9F44A23C3A021D0F11E97285AE",
                                       "referer":  "https://cinejoy.pk/",
                                       "origin":  "https://cinejoy.pk",
                                       "nativeMode":  false,
@@ -47,7 +47,7 @@
                                   },
                       "VidFast":  {
                                       "file":  "extractors/VidFastExtractor.js",
-                                      "hash":  "995D43A84CB4389AE9219CE9EE8AF97C",
+                                      "hash":  "0EB713FA6BDE626C12ACBBC71E2B3439",
                                       "nativeMode":  false,
                                       "mediaTypes":  [
                                                          "movie",
@@ -65,7 +65,7 @@
                                   },
                       "VixSrc":  {
                                      "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "13CD3DD7A11009FC3BB2F5C5E070EB8F",
+                                     "hash":  "9F126702DBF781FE6B99B3EB7469C469",
                                      "nativeMode":  false,
                                      "mediaTypes":  [
                                                         "movie",
@@ -83,7 +83,7 @@
                                    },
                       "LordFlix":  {
                                        "file":  "extractors/LordFlixExtractor.js",
-                                       "hash":  "65D597DC8C75D2257EA242287490E665",
+                                       "hash":  "6C87F4BA377E9EBE621D34AEE36A724A",
                                        "mediaTypes":  [
                                                           "movie",
                                                           "tv"

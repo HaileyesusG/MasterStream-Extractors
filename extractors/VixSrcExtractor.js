@@ -63,8 +63,33 @@
   }
 
   
+  async function isStreamPlayable(url, headers) {
+    if (!url) return false;
+    try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, 4000) : null;
+      var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
+      var res = await fetch(url, {
+        method: 'GET',
+        headers: reqHeaders,
+        signal: controller ? controller.signal : undefined
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      return res.status >= 200 && res.status < 400;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode, title) {
     if (!result || !result.url) return null;
+
+    // Validate that the primary stream is actually playable before returning success or attaching any dub!
+    var isPlayable = await isStreamPlayable(result.url, result.headers);
+    if (!isPlayable) {
+      console.warn(TAG + ' ⚠️ Primary stream health check failed (unplayable/403/dead) — rejecting result');
+      return null;
+    }
 
     try {
       var catalog = await getAmharicCatalog();
@@ -230,7 +255,7 @@
 
       // Construct Master HLS playlist URL with explicit .m3u8 extension
       // This ensures ExoPlayer uses HlsMediaSource instead of ProgressiveMediaSource
-      var masterPlaylistUrl = streamBase + '.m3u8?token=' + token + '&expires=' + expires + '&h=1&lang=en';
+      var masterPlaylistUrl = streamBase + '.m3u8?token=' + token + '&expires=' + expires + '&lang=en';
       console.log(TAG + ' ✅ Extracted master HLS stream URL in <400ms: ' + masterPlaylistUrl);
 
       var subtitles = [];
@@ -260,7 +285,11 @@
       };
 
       var vsFinal = await attachAmharicAudioTrack(vixSrcResult, tmdbId, isTv, s, e, title);
-      return vsFinal || vixSrcResult;
+      if (!vsFinal || !vsFinal.url) {
+        console.warn(TAG + ' ⚠️ VixSrc stream rejected by health check');
+        return null;
+      }
+      return vsFinal;
 
     } catch (err) {
       console.error(TAG + ' 💥 Extraction error: ' + (err.message || err));

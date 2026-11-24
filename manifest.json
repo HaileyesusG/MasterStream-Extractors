@@ -1,5 +1,5 @@
 {
-    "version":  405,
+    "version":  406,
     "providerPriority":  [
                              "VixSrc",
                              "Videasy",
@@ -65,7 +65,7 @@
                                   },
                       "VixSrc":  {
                                      "file":  "extractors/VixSrcExtractor.js",
-                                     "hash":  "0DE323005A18FD0E491554F089527C90",
+                                     "hash":  "0D4F26BBB1F3DC3DF7649984D23AEF15",
                                      "nativeMode":  false,
                                      "mediaTypes":  [
                                                         "movie",

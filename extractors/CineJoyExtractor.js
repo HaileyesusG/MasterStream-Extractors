@@ -10,7 +10,11 @@
   'use strict';
 
   var TAG = '[CineJoyExtractor]';
-  var DOMAIN = 'https://vidly.pro';
+  // Active source domain — comment out the less performant one to switch:
+  var DOMAIN = 'https://bingr.one';
+  var WATCH_PREFIX = '/watch';
+  // var DOMAIN = 'https://vidly.pro';
+  // var WATCH_PREFIX = '';
   var CIPHER_KEY = 'vY7#qL2!mZ9@wK4$';
   var USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
@@ -328,8 +332,8 @@ async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode
     }
 
     var pageUrl = isTvShow
-      ? DOMAIN + '/tv/' + id + '/' + (season || 1) + '/' + (episode || 1)
-      : DOMAIN + '/movie/' + id;
+      ? DOMAIN + WATCH_PREFIX + '/tv/' + id + '/' + (season || 1) + '/' + (episode || 1)
+      : DOMAIN + WATCH_PREFIX + '/movie/' + id;
 
     console.log(TAG + ' 🚀 Fetching embed page: ' + pageUrl);
 
@@ -461,7 +465,7 @@ async function attachAmharicAudioTrack(result, tmdbId, isTvShow, season, episode
       }
 
       if (streams.length === 0) {
-        console.warn(TAG + ' ❌ No streams found on vidly.pro');
+        console.warn(TAG + ' ❌ No streams found on ' + DOMAIN);
         return null;
       }
 

@@ -32,11 +32,11 @@
   }
 
   // Fast pre-flight health check to verify a stream link is actually reachable and not blocked (HTTP 429/428/403)
-  async function isStreamPlayable(url, headers) {
+  async function isStreamPlayable(url, headers, timeoutMs) {
     if (!url) return false;
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
+      var timeoutId = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || 4000) : null;
       var reqHeaders = Object.assign({}, headers || {}, { 'Range': 'bytes=0-10' });
       var res = await fetch(url, {
         method: 'GET',
@@ -274,23 +274,21 @@
         return b.qualityNum - a.qualityNum;
       });
 
-      // Health check the top candidate stream
-      var isAlive = await isStreamPlayable(parsed[0].url, { 'Referer': VIDVAULT_BASE + '/' });
-      if (!isAlive) {
-        console.warn(TAG + ' ⚠️ [VidVault Native Fallback] Top stream health check failed, checking remaining qualities...');
-        var viable = null;
-        for (var k = 1; k < parsed.length; k++) {
-          if (await isStreamPlayable(parsed[k].url, { 'Referer': VIDVAULT_BASE + '/' })) {
-            viable = parsed[k];
-            break;
-          }
-        }
-        if (!viable) {
-          console.warn(TAG + ' ⚠️ [VidVault Native Fallback] All streams failed health check');
-          return null;
-        }
-        parsed = parsed.filter(function (p) { return p !== viable; });
+      // Fast parallel warm-up & health check (4s): promotes the highest verified-alive quality,
+      // but does NOT discard freshly-signed vidvault.to URLs if the worker is cold (>4s first byte).
+      var probeHeaders = { 'Referer': VIDVAULT_BASE + '/' };
+      var checks = await Promise.all(parsed.map(function (p) {
+        return isStreamPlayable(p.url, probeHeaders, 4000);
+      }));
+
+      var viableIndex = checks.indexOf(true);
+      if (viableIndex > 0) {
+        console.log(TAG + ' 🔄 [VidVault Native Fallback] Promoting verified stream: ' + parsed[viableIndex].quality);
+        var viable = parsed[viableIndex];
+        parsed = parsed.filter(function (p, idx) { return idx !== viableIndex; });
         parsed.unshift(viable);
+      } else if (viableIndex === -1) {
+        console.log(TAG + ' ⏳ [VidVault Native Fallback] Worker cold on probe, returning ' + parsed.length + ' freshly-signed streams anyway');
       }
 
       var parsedQualities = parsed.map(function (p) {
@@ -356,13 +354,16 @@
       var type = isTv ? 'tv' : 'movie';
       console.log(TAG + ' 🔍 Extracting for ' + type + ' tmdbId=' + tmdbId + (isTv ? ' (S' + (season || 1) + 'E' + (episode || 1) + ')' : ''));
 
-      // 1. Try Vidlink fast MP4 first (PRIORITY 1)
-      var vidlinkResult = await extractVidlink(type, tmdbId, season, episode);
+      // Run Vidlink (Priority 1) and Native VidVault (Priority 2) in parallel
+      // so a failing Vidlink check does not add 5-8s before VidVault even starts fetching.
+      var vidlinkPromise = extractVidlink(type, tmdbId, season, episode);
+      var nativePromise = extractNativeVidVault(type, tmdbId, season, episode, title, year);
+
+      var vidlinkResult = await vidlinkPromise;
       if (vidlinkResult) return vidlinkResult;
 
-      // 2. Fall back to Native VidVault Direct (PRIORITY 2 FALLBACK)
-      console.log(TAG + ' 🔄 Vidlink skipped/unavailable, trying VidVault native fallback...');
-      var nativeResult = await extractNativeVidVault(type, tmdbId, season, episode, title, year);
+      console.log(TAG + ' 🔄 Vidlink skipped/unavailable, using VidVault native fallback...');
+      var nativeResult = await nativePromise;
       if (nativeResult) return nativeResult;
 
       console.warn(TAG + ' ❌ Both Vidlink and VidVault failed for tmdbId=' + tmdbId);
